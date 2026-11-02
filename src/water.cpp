@@ -27,6 +27,8 @@ GL_ENTRY(PFNGLDELETEPROGRAMPROC, deleteProgram);
 GL_ENTRY(PFNGLGETUNIFORMLOCATIONPROC, uniformLocation);
 GL_ENTRY(PFNGLUNIFORM1FPROC, uniform1f);
 GL_ENTRY(PFNGLUNIFORM3FPROC, uniform3f);
+GL_ENTRY(PFNGLACTIVETEXTUREPROC, activeTexture);
+GL_ENTRY(PFNGLUNIFORM1IPROC, uniform1i);
 #undef GL_ENTRY
 
 GLuint program, normalTexture, grid;
@@ -37,6 +39,7 @@ const char* vertexSource = R"GLSL(
 uniform float t, amplitude, heading;
 varying vec3 world;
 varying vec2 slope;
+varying vec4 mirrorClip;
 void wave(vec2 dir, float k, float speed, float a) {
     float c = cos(heading), s = sin(heading);
     dir = mat2(c,s,-s,c) * normalize(dir);
@@ -50,6 +53,7 @@ void main() {
     wave(vec2(1.0,.3), 2.5, 1.9, .052);
     wave(vec2(-.2,1.0), 3.8, 2.4, .031);
     wave(vec2(.7,-.8), 5.2, 3.1, .019);
+    mirrorClip = gl_ModelViewProjectionMatrix * vec4(world.x,-world.y,world.z,1.0);
     gl_Position = gl_ModelViewProjectionMatrix * vec4(world,1.0);
 }
 )GLSL";
@@ -58,9 +62,10 @@ const char* fragmentSource = R"GLSL(
 #version 120
 uniform float t, amplitude;
 uniform vec3 eye;
-uniform sampler2D detail;
+uniform sampler2D detail, reflectionMap;
 varying vec3 world;
 varying vec2 slope;
+varying vec4 mirrorClip;
 vec2 detailSlope(vec2 uv) {
     vec3 n = texture2D(detail,uv).rgb*2.0-1.0;
     return -n.xy/max(n.z,.01);
@@ -74,7 +79,9 @@ void main() {
     float glint = pow(max(dot(n,h),0.0),85.0);
     vec3 color = vec3(.12,.58,.65) + vec3(.75,.72,.63)*glint*min(amplitude,1.0)
                + vec3(.32,.40,.37)*dot(n.xz,vec2(.6,.8));
-    gl_FragColor = vec4(color,.38);
+    vec2 uv = mirrorClip.xy/mirrorClip.w*.5+.5;
+    vec3 reflected = texture2D(reflectionMap,uv+.015*n.xz).rgb;
+    gl_FragColor = vec4(mix(color,reflected,.55),.72);
 }
 )GLSL";
 
@@ -111,6 +118,8 @@ bool initializeWater() {
     LOAD(uniformLocation,"glGetUniformLocation")
     LOAD(uniform1f,"glUniform1f")
     LOAD(uniform3f,"glUniform3f")
+    LOAD(activeTexture,"glActiveTexture")
+    LOAD(uniform1i,"glUniform1i")
 #undef LOAD
     GLuint vert = compile(GL_VERTEX_SHADER,vertexSource);
     GLuint frag = compile(GL_FRAGMENT_SHADER,fragmentSource);
@@ -129,6 +138,9 @@ bool initializeWater() {
         std::cerr << message << '\n';
         return false;
     }
+    useProgram(program);
+    uniform1i(uniformLocation(program,"reflectionMap"),1);
+    useProgram(0);
     timeLoc = uniformLocation(program,"t");
     ampLoc = uniformLocation(program,"amplitude");
     headingLoc = uniformLocation(program,"heading");
@@ -167,7 +179,7 @@ bool initializeWater() {
     return glGetError() == GL_NO_ERROR;
 }
 
-void drawWater(const WaterState& s, float x, float y, float z) {
+void drawWater(const WaterState& s, float x, float y, float z, GLuint reflection) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     useProgram(program);
@@ -176,6 +188,9 @@ void drawWater(const WaterState& s, float x, float y, float z) {
     uniform1f(headingLoc,s.heading);
     uniform3f(eyeLoc,x,y,z);
     glBindTexture(GL_TEXTURE_2D,normalTexture);
+    activeTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D,reflection);
+    activeTexture(GL_TEXTURE0);
     glCallList(grid);
     useProgram(0);
     glDisable(GL_BLEND);

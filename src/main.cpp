@@ -1,5 +1,6 @@
 #include <GLFW/glfw3.h>
 #include "water.h"
+#include "target.h"
 #include <cstdlib>
 #include <algorithm>
 #include <array>
@@ -68,10 +69,11 @@ void courtyard() {
     }
 }
 
-void render(const Camera& c, const WaterState& water, int width, int height) {
-    glViewport(0,0,width,height);
+Target reflectionTarget;
+
+bool render(const Camera& c, const WaterState& water, int width, int height) {
+    if (!reflectionTarget.resize(width,height)) return false;
     glClearColor(.73f,.84f,.86f,1);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     double top = .1*std::tan(28*rad), right = top*width/height;
@@ -81,8 +83,23 @@ void render(const Camera& c, const WaterState& water, int width, int height) {
     glRotated(-c.pitch,1,0,0);
     glRotated(c.yaw,0,1,0);
     glTranslated(-c.x,-c.y,-c.z);
+    reflectionTarget.bind();
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glPushMatrix();
+    glScalef(1,-1,1);
+    const GLdouble above[] = {0,1,0,0};
+    glClipPlane(GL_CLIP_PLANE0,above);
+    glEnable(GL_CLIP_PLANE0);
+    // Courtyard geometry is two-sided; the mirror reverses winding.
+    glDisable(GL_CULL_FACE);
     courtyard();
-    drawWater(water,c.x,c.y,c.z);
+    glDisable(GL_CLIP_PLANE0);
+    glPopMatrix();
+    bindScreen(width,height);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    courtyard();
+    drawWater(water,c.x,c.y,c.z,reflectionTarget.color);
+    return true;
 }
 
 void waterKey(GLFWwindow* window, int key, int, int action, int) {
@@ -147,7 +164,7 @@ int main(int argc, char** argv) {
     GLFWwindow* window = glfwCreateWindow(1280,720,"Courtyard Reflections",nullptr,nullptr);
     if (!window) { glfwTerminate(); return 1; }
     glfwMakeContextCurrent(window);
-    if (!initializeWater()) {
+    if (!initializeTargets() || !initializeWater()) {
         releaseWater();
         glfwTerminate();
         return 1;
@@ -170,11 +187,12 @@ int main(int argc, char** argv) {
         int w, h;
         glfwGetFramebufferSize(window,&w,&h);
         if (w <= 0 || h <= 0) { glfwWaitEventsTimeout(.1); continue; }
-        render(camera,water,w,h);
+        if (!render(camera,water,w,h)) { result = 1; break; }
         if (snapshot) { result = capture(argv[2],w,h) ? 0 : 1; break; }
         glfwSwapBuffers(window);
     }
     releaseWater();
+    reflectionTarget.release();
     glfwDestroyWindow(window);
     glfwTerminate();
     return result;
