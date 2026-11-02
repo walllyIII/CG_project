@@ -4,7 +4,23 @@
 
 在一个可漫游的庭院里，用同一片平静水面观察三种变化：抬低视角时墙体倒影的强弱、水下花砖随波纹产生的扭曲，以及池底从浅到深的颜色过渡。有限的池岸和容易辨认的几何物体也提供了检查倒影错位、采样越界和深度错误的参照。
 
-项目处于提案阶段，仓库尚无可构建的程序。拟采用 **C++、OpenGL 和 GLSL**，最终以课程要求为准。开发顺序、工时和各周验收见[六周执行计划](EXECUTION_PLAN.md)。
+**当前进度 · W1 静态场景。** C++ 和 OpenGL 原型已可运行。下图为默认机位的实际输出。水面暂用半透明平面标记平均高度 `y = 0`，下方的三级池底、棋盘砖和两块石体用于后续观察折射。GLSL 动态水面从 W2 开始。各阶段的目标见[六周执行计划](EXECUTION_PLAN.md)。
+
+![默认机位看到的庭院、亭子与三级池底](docs/w1-courtyard.png)
+
+## 构建与运行
+
+已验证环境为 Windows、MinGW-w64 GCC 15.2 和 CMake。需要 CMake 3.16 或更新版本、Git、C/C++ 编译器以及支持桌面 OpenGL 兼容模式的图形环境。CMake 优先使用已安装的 GLFW 3.3+，否则首次配置会联网下载 GLFW 3.4。场景几何和颜色均由代码生成。
+
+在仓库根目录的 PowerShell 中执行，确保 MinGW 的 `bin` 目录位于 PATH。
+
+```powershell
+cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+.\build\courtyard.exe
+```
+
+用 **W/S** 前后移动、**A/D** 横移、**方向键** 转动视角、**Q/E** 降低或升高机位。按 **R** 恢复截图中的机位，**Esc** 退出。要复现基准画面，运行 `.\build\courtyard.exe --capture build/w1.ppm`，程序使用同一渲染路径在隐藏窗口绘制一帧并退出。
 
 ## 场景与交互
 
