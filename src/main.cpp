@@ -48,14 +48,19 @@ void submerged() {
     box(3,-1.52f,-1,1.3f,.66f,.8f,slate);
 }
 
-void courtyard() {
-    const Color paving{.81f,.76f,.63f}, plaster{.93f,.89f,.76f};
-    const Color timber{.45f,.21f,.14f}, slate{.21f,.29f,.30f};
+void banks() {
+    const Color paving{.81f,.76f,.63f};
     // Four solid banks leave an opening for the submerged floor.
     box(-12,-2,-12,24,2.25f,8,paving);
     box(-12,-2,4,24,2.25f,8,paving);
     box(-12,-2,-4,6,2.25f,8,paving);
     box(6,-2,-4,6,2.25f,8,paving);
+}
+
+void courtyard() {
+    const Color paving{.81f,.76f,.63f}, plaster{.93f,.89f,.76f};
+    const Color timber{.45f,.21f,.14f}, slate{.21f,.29f,.30f};
+    banks();
     box(-12,.25f,-10,24,2.6f,.4f,plaster);
     box(-12,2.85f,-10.15f,24,.2f,.7f,slate);
     box(-11,.25f,-10,.4f,2.6f,20,plaster);
@@ -75,8 +80,11 @@ void courtyard() {
 
 Target reflectionTarget, refractionTarget;
 
-bool render(const Camera& c, const WaterState& water, int width, int height) {
-    if (!reflectionTarget.resize(width,height) || !refractionTarget.resize(width,height)) return false;
+struct PassTimes { double reflection = 0, refraction = 0, finalScene = 0; };
+bool render(const Camera& c, const WaterState& water, int width, int height, int divisor = 1, PassTimes* timing = nullptr) {
+    int rw = std::max(1,width/divisor), rh = std::max(1,height/divisor);
+    double start = glfwGetTime();
+    if (!reflectionTarget.resize(rw,rh) || !refractionTarget.resize(rw,rh)) return false;
     glClearColor(.73f,.84f,.86f,1);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -99,16 +107,24 @@ bool render(const Camera& c, const WaterState& water, int width, int height) {
     courtyard();
     glDisable(GL_CLIP_PLANE0);
     glPopMatrix();
+    if (timing) { glFinish(); timing->reflection += glfwGetTime()-start; start = glfwGetTime(); }
     refractionTarget.bind();
     glClearColor(0,0,0,0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    const GLdouble below[] = {0,-1,0,0};
+    glClipPlane(GL_CLIP_PLANE0,below);
+    glEnable(GL_CLIP_PLANE0);
+    banks();
     submerged();
+    glDisable(GL_CLIP_PLANE0);
+    if (timing) { glFinish(); timing->refraction += glfwGetTime()-start; start = glfwGetTime(); }
     bindScreen(width,height);
     glClearColor(.73f,.84f,.86f,1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     courtyard();
     submerged();
     drawWater(water,c.x,c.y,c.z,reflectionTarget.color,refractionTarget.color,refractionTarget.depth);
+    if (timing) { glFinish(); timing->finalScene += glfwGetTime()-start; }
     return true;
 }
 
@@ -116,6 +132,12 @@ void waterKey(GLFWwindow* window, int key, int, int action, int) {
     if (action == GLFW_RELEASE) return;
     auto& water = *static_cast<WaterState*>(glfwGetWindowUserPointer(window));
     switch (key) {
+        case GLFW_KEY_1: if (action == GLFW_PRESS) water.reflection = !water.reflection; break;
+        case GLFW_KEY_2: if (action == GLFW_PRESS) water.distortion = !water.distortion; break;
+        case GLFW_KEY_3: if (action == GLFW_PRESS) water.fresnel = !water.fresnel; break;
+        case GLFW_KEY_4: if (action == GLFW_PRESS) water.debugView = (water.debugView+1)%4; break;
+        case GLFW_KEY_COMMA: water.absorption = std::max(0.f,water.absorption-.1f); break;
+        case GLFW_KEY_PERIOD: water.absorption = std::min(3.f,water.absorption+.1f); break;
         case GLFW_KEY_SPACE: if (action == GLFW_PRESS) water.paused = !water.paused; break;
         case GLFW_KEY_0: water.amplitude = 0; break;
         case GLFW_KEY_MINUS: water.amplitude = std::max(0.f,water.amplitude-.1f); break;
@@ -159,18 +181,36 @@ bool capture(const char* path, int w, int h) {
 
 int main(int argc, char** argv) {
     WaterState water;
-    bool snapshot = argc >= 3 && argc <= 5 && std::string(argv[1]) == "--capture";
+    Camera camera;
+    bool benchmark = argc >= 2 && std::string(argv[1]) == "--benchmark" &&
+                     (argc == 2 || (argc == 3 && std::string(argv[2]) == "half"));
+    bool snapshot = argc >= 3 && argc <= 7 && std::string(argv[1]) == "--capture";
     if (snapshot && argc >= 4) snapshot = parseNumber(argv[3],2,water.amplitude);
-    if (snapshot && argc == 5) snapshot = parseNumber(argv[4],86400,water.time);
-    if (!snapshot && argc != 1) {
-        std::cerr << "Usage: courtyard [--capture output.ppm [amplitude 0..2 [seconds 0..86400]]]\n";
+    if (snapshot && argc >= 5) snapshot = parseNumber(argv[4],86400,water.time);
+    if (snapshot && argc >= 6) {
+        std::string mode = argv[5];
+        if (mode == "no-reflection") water.reflection = false;
+        else if (mode == "no-distortion") water.distortion = false;
+        else if (mode == "fixed-blend") water.fresnel = false;
+        else if (mode == "depth") water.debugView = 3;
+        else if (mode != "full") snapshot = false;
+    }
+    if (snapshot && argc == 7) {
+        std::string view = argv[6];
+        if (view == "grazing") camera = {2.5,1.25,6,-15,-7};
+        else if (view == "top") camera = {0,10,2,0,-77};
+        else if (view == "edge") camera = {5.8,1.8,3.6,-45,-32};
+        else if (view != "default") snapshot = false;
+    }
+    if (!benchmark && !snapshot && argc != 1) {
+        std::cerr << "Usage: courtyard [--capture output.ppm [amplitude 0..2 [seconds 0..86400 [mode [view]]]]] or --benchmark [half]\n";
         return 1;
     }
     glfwSetErrorCallback([](int, const char* message) { std::cerr << message << '\n'; });
     if (!glfwInit()) return 1;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,1);
-    if (snapshot) glfwWindowHint(GLFW_VISIBLE,GLFW_FALSE);
+    if (snapshot || benchmark) glfwWindowHint(GLFW_VISIBLE,GLFW_FALSE);
     GLFWwindow* window = glfwCreateWindow(1280,720,"Courtyard Reflections",nullptr,nullptr);
     if (!window) { glfwTerminate(); return 1; }
     glfwMakeContextCurrent(window);
@@ -181,12 +221,41 @@ int main(int argc, char** argv) {
     }
     glfwSetWindowUserPointer(window,&water);
     glfwSetKeyCallback(window,waterKey);
-    glfwSwapInterval(1);
+    glfwSwapInterval(benchmark ? 0 : 1);
     glEnable(GL_DEPTH_TEST);
-    Camera camera;
     double last = glfwGetTime();
     int result = 0;
-    while (!glfwWindowShouldClose(window)) {
+    if (benchmark) {
+        int w,h;
+        glfwGetFramebufferSize(window,&w,&h);
+        int divisor = argc == 3 ? 2 : 1;
+        constexpr int warmup = 60, frames = 300, profileFrames = 60;
+        std::cout << glGetString(GL_RENDERER) << " | " << glGetString(GL_VERSION)
+                  << " | screen " << w << "x" << h << " | target " << w/divisor << "x" << h/divisor << '\n';
+        PassTimes times;
+        double start = 0;
+        for (int i = -warmup; i < frames+profileFrames; ++i) {
+            if (i == 0) { glFinish(); start = glfwGetTime(); }
+            water.time = (i+warmup)/60.f;
+            if (!render(camera,water,w,h,divisor,i >= frames ? &times : nullptr)) { result = 1; break; }
+            // Consume a water-region pixel before swapping the hidden back buffer.
+            // This also fences each measured frame and prevents queued/occluded swaps
+            // from being mistaken for completed rendering.
+            unsigned char probe[4];
+            glReadPixels(w/2,h/2,1,1,GL_RGBA,GL_UNSIGNED_BYTE,probe);
+            glfwSwapBuffers(window);
+            if (i == frames-1) {
+                glFinish();
+                double seconds = glfwGetTime()-start;
+                std::cout << frames << " frames in " << seconds << " s, " << frames/seconds
+                          << " FPS, " << 1000*seconds/frames << " ms/frame\n";
+            }
+        }
+        std::cout << "Serialized pass timings (ms): " << times.reflection*1000/profileFrames
+                  << ", " << times.refraction*1000/profileFrames << ", " << times.finalScene*1000/profileFrames << '\n';
+        if (glGetError() != GL_NO_ERROR) result = 1;
+    }
+    while (!benchmark && !glfwWindowShouldClose(window)) {
         glfwPollEvents();
         double now = glfwGetTime();
         if (!snapshot) {

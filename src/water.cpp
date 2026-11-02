@@ -32,7 +32,7 @@ GL_ENTRY(PFNGLUNIFORM1IPROC, uniform1i);
 #undef GL_ENTRY
 
 GLuint program, normalTexture, grid;
-GLint timeLoc, ampLoc, headingLoc, eyeLoc;
+GLint timeLoc, ampLoc, headingLoc, eyeLoc, effectsLoc, debugLoc, absorptionLoc;
 
 const char* vertexSource = R"GLSL(
 #version 120
@@ -62,7 +62,9 @@ void main() {
 const char* fragmentSource = R"GLSL(
 #version 120
 uniform float t, amplitude;
-uniform vec3 eye;
+uniform vec3 eye, effects;
+uniform int debugView;
+uniform float absorption;
 uniform sampler2D detail, reflectionMap, transmissionMap, depthMap;
 varying vec3 world;
 varying vec2 slope;
@@ -88,7 +90,7 @@ void main() {
     vec2 screenUV = sceneClip.xy/sceneClip.w*.5+.5;
     vec2 offset = clamp((gl_ModelViewMatrix*vec4(n-vec3(0,1,0),0)).xy*.035,
                         vec2(-.018),vec2(.018));
-    vec2 sampleUV = screenUV + offset;
+    vec2 sampleUV = screenUV + effects.y*offset;
     float floorDepth = texture2D(depthMap,sampleUV).r;
     float baseDepth = texture2D(depthMap,screenUV).r;
     // Reject empty texels, viewport crossings, foreground hits and depth discontinuities.
@@ -102,12 +104,16 @@ void main() {
     vec3 floorPoint = eyePoint(sampleUV,floorDepth);
     vec3 surfacePoint = (gl_ModelViewMatrix*vec4(world,1)).xyz;
     float path = length(floorPoint-surfacePoint);
-    vec3 attenuation = exp(-vec3(.51,.23,.15)*path);
+    vec3 attenuation = exp(-vec3(.51,.23,.15)*path*absorption);
     vec3 transmitted = mix(vec3(.045,.29,.32),floorColor,attenuation);
     vec2 mirrorUV = mirrorClip.xy/mirrorClip.w*.5+.5+offset*.55;
     vec3 reflected = texture2D(reflectionMap,mirrorUV).rgb;
     float cosine = clamp(dot(normalize(eye-world),n),0.0,1.0);
     float weight = .035+.965*pow(1.0-cosine,5.0);
+    weight = mix(.32,weight,effects.z)*effects.x;
+    if (debugView == 1) { gl_FragColor = vec4(reflected,1); return; }
+    if (debugView == 2) { gl_FragColor = vec4(floorColor,1); return; }
+    if (debugView == 3) { gl_FragColor = vec4(vec3(clamp(path/5.0,0.0,1.0)),1); return; }
     gl_FragColor = vec4(mix(transmitted,reflected,weight)+vec3(.65,.62,.54)*glint,1);
 
 }
@@ -176,6 +182,10 @@ bool initializeWater() {
     headingLoc = uniformLocation(program,"heading");
     eyeLoc = uniformLocation(program,"eye");
 
+    effectsLoc = uniformLocation(program,"effects");
+    debugLoc = uniformLocation(program,"debugView");
+    absorptionLoc = uniformLocation(program,"absorption");
+
     // Encode a seamless periodic normal field with its tangent axes along world X/Z.
     constexpr int size = 128;
     std::array<GLubyte,size*size*3> pixels;
@@ -216,6 +226,9 @@ void drawWater(const WaterState& s, float x, float y, float z, GLuint reflection
     uniform1f(timeLoc,s.time);
     uniform1f(ampLoc,s.amplitude);
     uniform1f(headingLoc,s.heading);
+    uniform3f(effectsLoc,s.reflection,s.distortion,s.fresnel);
+    uniform1i(debugLoc,s.debugView);
+    uniform1f(absorptionLoc,s.absorption);
     uniform3f(eyeLoc,x,y,z);
     glBindTexture(GL_TEXTURE_2D,normalTexture);
     activeTexture(GL_TEXTURE1);

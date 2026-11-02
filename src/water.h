@@ -3,6 +3,9 @@
 
 struct WaterState {
     float amplitude = 1, heading = 0, time = 0;
+    bool reflection = true, distortion = true, fresnel = true;
+    int debugView = 0;
+    float absorption = 1;
     bool paused = false;
 };
 
