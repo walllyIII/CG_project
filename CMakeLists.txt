@@ -15,6 +15,6 @@ if(NOT TARGET glfw)
     FetchContent_MakeAvailable(glfw)
 endif()
 
-add_executable(courtyard src/main.cpp)
+add_executable(courtyard src/main.cpp src/water.cpp)
 target_compile_features(courtyard PRIVATE cxx_std_17)
 target_link_libraries(courtyard PRIVATE glfw OpenGL::GL)

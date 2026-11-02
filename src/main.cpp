@@ -1,4 +1,6 @@
 #include <GLFW/glfw3.h>
+#include "water.h"
+#include <cstdlib>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -10,7 +12,6 @@
 namespace {
 using Color = std::array<float, 3>;
 constexpr double rad = 3.141592653589793 / 180.0;
-constexpr float waterY = 0.0f;
 struct Camera {
     double x = 8.2, y = 5.5, z = 10.4;
     double yaw = -34, pitch = -22;
@@ -65,17 +66,9 @@ void courtyard() {
         box(-4.6f+inset,3.28f+.17f*layer,-8.6f+inset,
             9.2f-2*inset,.18f,4.6f-2*inset,slate);
     }
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(.12f,.58f,.65f,.38f);
-    glBegin(GL_QUADS);
-    glVertex3f(-6,waterY,-4); glVertex3f(6,waterY,-4);
-    glVertex3f(6,waterY,4); glVertex3f(-6,waterY,4);
-    glEnd();
-    glDisable(GL_BLEND);
 }
 
-void render(const Camera& c, int width, int height) {
+void render(const Camera& c, const WaterState& water, int width, int height) {
     glViewport(0,0,width,height);
     glClearColor(.73f,.84f,.86f,1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -89,6 +82,26 @@ void render(const Camera& c, int width, int height) {
     glRotated(c.yaw,0,1,0);
     glTranslated(-c.x,-c.y,-c.z);
     courtyard();
+    drawWater(water,c.x,c.y,c.z);
+}
+
+void waterKey(GLFWwindow* window, int key, int, int action, int) {
+    if (action == GLFW_RELEASE) return;
+    auto& water = *static_cast<WaterState*>(glfwGetWindowUserPointer(window));
+    switch (key) {
+        case GLFW_KEY_SPACE: if (action == GLFW_PRESS) water.paused = !water.paused; break;
+        case GLFW_KEY_0: water.amplitude = 0; break;
+        case GLFW_KEY_MINUS: water.amplitude = std::max(0.f,water.amplitude-.1f); break;
+        case GLFW_KEY_EQUAL: water.amplitude = std::min(2.f,water.amplitude+.1f); break;
+        case GLFW_KEY_LEFT_BRACKET: water.heading -= 15*rad; break;
+        case GLFW_KEY_RIGHT_BRACKET: water.heading += 15*rad; break;
+    }
+}
+
+bool parseNumber(const char* input, float max, float& out) {
+    char* end;
+    out = std::strtof(input,&end);
+    return end != input && *end == '\0' && std::isfinite(out) && out >= 0 && out <= max;
 }
 
 void navigate(GLFWwindow* window, Camera& c, double dt) {
@@ -118,17 +131,29 @@ bool capture(const char* path, int w, int h) {
 } // namespace
 
 int main(int argc, char** argv) {
-    bool snapshot = argc == 3 && std::string(argv[1]) == "--capture";
+    WaterState water;
+    bool snapshot = argc >= 3 && argc <= 5 && std::string(argv[1]) == "--capture";
+    if (snapshot && argc >= 4) snapshot = parseNumber(argv[3],2,water.amplitude);
+    if (snapshot && argc == 5) snapshot = parseNumber(argv[4],86400,water.time);
     if (!snapshot && argc != 1) {
-        std::cerr << "Usage: courtyard [--capture output.ppm]\n";
+        std::cerr << "Usage: courtyard [--capture output.ppm [amplitude 0..2 [seconds 0..86400]]]\n";
         return 1;
     }
     glfwSetErrorCallback([](int, const char* message) { std::cerr << message << '\n'; });
     if (!glfwInit()) return 1;
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,1);
     if (snapshot) glfwWindowHint(GLFW_VISIBLE,GLFW_FALSE);
     GLFWwindow* window = glfwCreateWindow(1280,720,"Courtyard Reflections",nullptr,nullptr);
     if (!window) { glfwTerminate(); return 1; }
     glfwMakeContextCurrent(window);
+    if (!initializeWater()) {
+        releaseWater();
+        glfwTerminate();
+        return 1;
+    }
+    glfwSetWindowUserPointer(window,&water);
+    glfwSetKeyCallback(window,waterKey);
     glfwSwapInterval(1);
     glEnable(GL_DEPTH_TEST);
     Camera camera;
@@ -137,15 +162,19 @@ int main(int argc, char** argv) {
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         double now = glfwGetTime();
-        if (!snapshot) navigate(window,camera,std::min(now-last,.1));
+        if (!snapshot) {
+            navigate(window,camera,std::min(now-last,.1));
+            if (!water.paused) water.time += static_cast<float>(now-last);
+        }
         last = now;
         int w, h;
         glfwGetFramebufferSize(window,&w,&h);
         if (w <= 0 || h <= 0) { glfwWaitEventsTimeout(.1); continue; }
-        render(camera,w,h);
+        render(camera,water,w,h);
         if (snapshot) { result = capture(argv[2],w,h) ? 0 : 1; break; }
         glfwSwapBuffers(window);
     }
+    releaseWater();
     glfwDestroyWindow(window);
     glfwTerminate();
     return result;
