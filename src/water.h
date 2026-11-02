@@ -8,5 +8,5 @@ struct WaterState {
 
 // Create and release with the rendering context current.
 bool initializeWater();
-void drawWater(const WaterState& state, float eyeX, float eyeY, float eyeZ, GLuint reflection);
+void drawWater(const WaterState& state, float eyeX, float eyeY, float eyeZ, GLuint reflection, GLuint transmission, GLuint depth);
 void releaseWater();

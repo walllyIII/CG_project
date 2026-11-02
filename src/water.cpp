@@ -39,7 +39,7 @@ const char* vertexSource = R"GLSL(
 uniform float t, amplitude, heading;
 varying vec3 world;
 varying vec2 slope;
-varying vec4 mirrorClip;
+varying vec4 mirrorClip, sceneClip;
 void wave(vec2 dir, float k, float speed, float a) {
     float c = cos(heading), s = sin(heading);
     dir = mat2(c,s,-s,c) * normalize(dir);
@@ -54,7 +54,8 @@ void main() {
     wave(vec2(-.2,1.0), 3.8, 2.4, .031);
     wave(vec2(.7,-.8), 5.2, 3.1, .019);
     mirrorClip = gl_ModelViewProjectionMatrix * vec4(world.x,-world.y,world.z,1.0);
-    gl_Position = gl_ModelViewProjectionMatrix * vec4(world,1.0);
+    sceneClip = gl_ModelViewProjectionMatrix * vec4(world,1.0);
+    gl_Position = sceneClip;
 }
 )GLSL";
 
@@ -62,13 +63,20 @@ const char* fragmentSource = R"GLSL(
 #version 120
 uniform float t, amplitude;
 uniform vec3 eye;
-uniform sampler2D detail, reflectionMap;
+uniform sampler2D detail, reflectionMap, transmissionMap, depthMap;
 varying vec3 world;
 varying vec2 slope;
-varying vec4 mirrorClip;
+varying vec4 mirrorClip, sceneClip;
 vec2 detailSlope(vec2 uv) {
     vec3 n = texture2D(detail,uv).rgb*2.0-1.0;
     return -n.xy/max(n.z,.01);
+}
+float eyeDepth(float d) {
+    return gl_ProjectionMatrix[3][2]/(2.0*d-1.0+gl_ProjectionMatrix[2][2]);
+}
+vec3 eyePoint(vec2 uv,float d) {
+    float z = eyeDepth(d);
+    return vec3((uv*2.0-1.0)*z/vec2(gl_ProjectionMatrix[0][0],gl_ProjectionMatrix[1][1]),-z);
 }
 void main() {
     vec2 fine = detailSlope(world.xz*.63 + vec2(.035,-.017)*t)
@@ -77,11 +85,31 @@ void main() {
     vec3 n = normalize(vec3(-grad.x,1.0,-grad.y));
     vec3 h = normalize(normalize(eye-world) + normalize(vec3(-.48,.48,-.73)));
     float glint = pow(max(dot(n,h),0.0),85.0);
-    vec3 color = vec3(.12,.58,.65) + vec3(.75,.72,.63)*glint*min(amplitude,1.0)
-               + vec3(.32,.40,.37)*dot(n.xz,vec2(.6,.8));
-    vec2 uv = mirrorClip.xy/mirrorClip.w*.5+.5;
-    vec3 reflected = texture2D(reflectionMap,uv+.015*n.xz).rgb;
-    gl_FragColor = vec4(mix(color,reflected,.55),.72);
+    vec2 screenUV = sceneClip.xy/sceneClip.w*.5+.5;
+    vec2 offset = clamp((gl_ModelViewMatrix*vec4(n-vec3(0,1,0),0)).xy*.035,
+                        vec2(-.018),vec2(.018));
+    vec2 sampleUV = screenUV + offset;
+    float floorDepth = texture2D(depthMap,sampleUV).r;
+    float baseDepth = texture2D(depthMap,screenUV).r;
+    // Reject empty texels, viewport crossings, foreground hits and depth discontinuities.
+    if (any(lessThan(sampleUV,vec2(0))) || any(greaterThan(sampleUV,vec2(1))) ||
+        floorDepth >= 1.0 || floorDepth <= gl_FragCoord.z ||
+        abs(eyeDepth(floorDepth)-eyeDepth(baseDepth)) > .65) {
+        sampleUV = screenUV;
+        floorDepth = baseDepth;
+    }
+    vec3 floorColor = texture2D(transmissionMap,sampleUV).rgb;
+    vec3 floorPoint = eyePoint(sampleUV,floorDepth);
+    vec3 surfacePoint = (gl_ModelViewMatrix*vec4(world,1)).xyz;
+    float path = length(floorPoint-surfacePoint);
+    vec3 attenuation = exp(-vec3(.51,.23,.15)*path);
+    vec3 transmitted = mix(vec3(.045,.29,.32),floorColor,attenuation);
+    vec2 mirrorUV = mirrorClip.xy/mirrorClip.w*.5+.5+offset*.55;
+    vec3 reflected = texture2D(reflectionMap,mirrorUV).rgb;
+    float cosine = clamp(dot(normalize(eye-world),n),0.0,1.0);
+    float weight = .035+.965*pow(1.0-cosine,5.0);
+    gl_FragColor = vec4(mix(transmitted,reflected,weight)+vec3(.65,.62,.54)*glint,1);
+
 }
 )GLSL";
 
@@ -140,6 +168,8 @@ bool initializeWater() {
     }
     useProgram(program);
     uniform1i(uniformLocation(program,"reflectionMap"),1);
+    uniform1i(uniformLocation(program,"transmissionMap"),2);
+    uniform1i(uniformLocation(program,"depthMap"),3);
     useProgram(0);
     timeLoc = uniformLocation(program,"t");
     ampLoc = uniformLocation(program,"amplitude");
@@ -179,7 +209,7 @@ bool initializeWater() {
     return glGetError() == GL_NO_ERROR;
 }
 
-void drawWater(const WaterState& s, float x, float y, float z, GLuint reflection) {
+void drawWater(const WaterState& s, float x, float y, float z, GLuint reflection, GLuint transmission, GLuint depth) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     useProgram(program);
@@ -190,6 +220,10 @@ void drawWater(const WaterState& s, float x, float y, float z, GLuint reflection
     glBindTexture(GL_TEXTURE_2D,normalTexture);
     activeTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D,reflection);
+    activeTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D,transmission);
+    activeTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D,depth);
     activeTexture(GL_TEXTURE0);
     glCallList(grid);
     useProgram(0);

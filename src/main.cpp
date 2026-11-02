@@ -35,14 +35,8 @@ void box(float x, float y, float z, float w, float h, float d, Color color) {
     glEnd();
 }
 
-void courtyard() {
-    const Color paving{.81f,.76f,.63f}, plaster{.93f,.89f,.76f};
-    const Color timber{.45f,.21f,.14f}, slate{.21f,.29f,.30f};
-    // Four solid banks leave an opening for the submerged floor.
-    box(-12,-2,-12,24,2.25f,8,paving);
-    box(-12,-2,4,24,2.25f,8,paving);
-    box(-12,-2,-4,6,2.25f,8,paving);
-    box(6,-2,-4,6,2.25f,8,paving);
+void submerged() {
+    const Color slate{.21f,.29f,.30f};
     for (int x = -6; x < 6; ++x) {
         const float floorY = -.42f - .55f*((x+6)/4);
         for (int z = -4; z < 4; ++z) {
@@ -52,6 +46,16 @@ void courtyard() {
     }
     box(-3,-.42f,1,1.2f,.24f,.75f,slate);
     box(3,-1.52f,-1,1.3f,.66f,.8f,slate);
+}
+
+void courtyard() {
+    const Color paving{.81f,.76f,.63f}, plaster{.93f,.89f,.76f};
+    const Color timber{.45f,.21f,.14f}, slate{.21f,.29f,.30f};
+    // Four solid banks leave an opening for the submerged floor.
+    box(-12,-2,-12,24,2.25f,8,paving);
+    box(-12,-2,4,24,2.25f,8,paving);
+    box(-12,-2,-4,6,2.25f,8,paving);
+    box(6,-2,-4,6,2.25f,8,paving);
     box(-12,.25f,-10,24,2.6f,.4f,plaster);
     box(-12,2.85f,-10.15f,24,.2f,.7f,slate);
     box(-11,.25f,-10,.4f,2.6f,20,plaster);
@@ -69,10 +73,10 @@ void courtyard() {
     }
 }
 
-Target reflectionTarget;
+Target reflectionTarget, refractionTarget;
 
 bool render(const Camera& c, const WaterState& water, int width, int height) {
-    if (!reflectionTarget.resize(width,height)) return false;
+    if (!reflectionTarget.resize(width,height) || !refractionTarget.resize(width,height)) return false;
     glClearColor(.73f,.84f,.86f,1);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -95,10 +99,16 @@ bool render(const Camera& c, const WaterState& water, int width, int height) {
     courtyard();
     glDisable(GL_CLIP_PLANE0);
     glPopMatrix();
+    refractionTarget.bind();
+    glClearColor(0,0,0,0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    submerged();
     bindScreen(width,height);
+    glClearColor(.73f,.84f,.86f,1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     courtyard();
-    drawWater(water,c.x,c.y,c.z,reflectionTarget.color);
+    submerged();
+    drawWater(water,c.x,c.y,c.z,reflectionTarget.color,refractionTarget.color,refractionTarget.depth);
     return true;
 }
 
@@ -192,6 +202,7 @@ int main(int argc, char** argv) {
         glfwSwapBuffers(window);
     }
     releaseWater();
+    refractionTarget.release();
     reflectionTarget.release();
     glfwDestroyWindow(window);
     glfwTerminate();
