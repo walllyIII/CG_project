@@ -4,9 +4,11 @@
 
 在一个可漫游的庭院里，用同一片平静水面观察三种变化：抬低视角时墙体倒影的强弱、水下花砖随波纹产生的扭曲，以及池底从浅到深的颜色过渡。有限的池岸和容易辨认的几何物体也提供了检查倒影错位、采样越界和深度错误的参照。
 
-**当前进度**　庭院水池已具备动态波面、建筑倒影、水下折射、深度吸收和视角相关的 Fresnel 混合。下图依次为完整效果、关闭倒影、关闭折射扰动、固定混合权重。四帧使用同一机位和动画时间。[实验条件、多角度截图与性能报告](docs/RESULTS.md)
+**当前进度 · 听雨小院 A 阶段**　北侧水榭、西侧短廊、透空花窗、厚池沿和南岸浅阶已搭成灰模。下图为零振幅下的南岸低机位，便于核对柱影与窗格倒影。[改造前后对照、近岸深度检查与复现命令](docs/stage-a/README.md)
 
-![固定机位的四组效果对照](docs/effects.png)
+![南岸低机位的水榭、短廊和漏窗](docs/stage-a/grazing.png)
+
+原型阶段的动态波面、折射、深度吸收和 Fresnel 四帧对照见[原场景实验报告](docs/RESULTS.md)。
 ## 构建与运行
 
 已验证环境为 Windows、MinGW-w64 GCC 15.2 和 CMake。需要 CMake 3.16 或更新版本、Git、C/C++ 编译器以及支持桌面 OpenGL 2.1 兼容上下文、帧缓冲对象（OpenGL 3.0 或 ARB_framebuffer_object）及 GLSL 1.20 的图形环境。CMake 优先使用已安装的 GLFW 3.3+，否则首次配置会联网下载 GLFW 3.4。场景几何和颜色均由代码生成。
@@ -26,7 +28,7 @@ cmake --build build --parallel
 
 按 **1** 切换倒影，**2** 切换折射扰动，**3** 在 Fresnel 和固定反射权重 0.32 之间切换。按 **4** 循环查看合成、反射、水下颜色和水中路径长度。**逗号 / 句号** 降低或提高吸收强度。
 
-截图命令按顺序接收输出路径、振幅、动画秒数、效果模式和机位。省略可选参数时使用振幅 1、时间 0、完整效果和默认机位。可选效果为 `full`、`no-reflection`、`no-distortion`、`fixed-blend`、`depth`，机位为 `default`、`top`、`grazing`、`edge`。
+截图命令按顺序接收输出路径、振幅、动画秒数、效果模式和机位。省略可选参数时使用振幅 1、时间 0、完整效果和默认机位。可选效果为 `full`、`no-reflection`、`no-distortion`、`fixed-blend`、`depth`、`coverage`（空深度检查），机位为 `default`、`top`、`grazing`、`edge`。
 
 ```powershell
 foreach ($mode in 'full','no-reflection','no-distortion','fixed-blend') {

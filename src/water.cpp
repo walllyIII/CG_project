@@ -101,6 +101,13 @@ void main() {
         floorDepth = baseDepth;
     }
     vec3 floorColor = texture2D(transmissionMap,sampleUV).rgb;
+    // In a closed pool every visible water pixel must hit underwater geometry.
+    // Check both the original ray and the sample retained after fallback.
+    if (debugView == 4) {
+        bool missing = baseDepth >= 1.0 || floorDepth >= 1.0;
+        gl_FragColor = missing ? vec4(1,0,1,1) : vec4(0,1,0,1);
+        return;
+    }
     vec3 floorPoint = eyePoint(sampleUV,floorDepth);
     vec3 surfacePoint = (gl_ModelViewMatrix*vec4(world,1)).xyz;
     float path = length(floorPoint-surfacePoint);

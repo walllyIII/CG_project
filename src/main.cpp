@@ -3,7 +3,7 @@
 #include "target.h"
 #include <cstdlib>
 #include <algorithm>
-#include <array>
+#include "scene.h"
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -11,72 +11,11 @@
 #include <vector>
 
 namespace {
-using Color = std::array<float, 3>;
 constexpr double rad = 3.141592653589793 / 180.0;
 struct Camera {
-    double x = 8.2, y = 5.5, z = 10.4;
-    double yaw = -34, pitch = -22;
+    double x = 6.6, y = 4.5, z = 8.5;
+    double yaw = -32, pitch = -18.5;
 };
-
-void tint(Color c, float light) {
-    glColor3f(c[0]*light, c[1]*light, c[2]*light);
-}
-
-void box(float x, float y, float z, float w, float h, float d, Color color) {
-    const float vertices[][3] = {{x,y,z},{x+w,y,z},{x+w,y+h,z},{x,y+h,z},
-        {x,y,z+d},{x+w,y,z+d},{x+w,y+h,z+d},{x,y+h,z+d}};
-    constexpr int faces[][4] = {{0,1,2,3},{4,5,6,7},{0,4,7,3},{1,5,6,2},{3,2,6,7},{0,1,5,4}};
-    constexpr float lights[] = {.71f,.86f,.66f,.76f,1,.52f};
-    glBegin(GL_QUADS);
-    for (int f = 0; f < 6; ++f) {
-        tint(color, lights[f]);
-        for (int i : faces[f]) glVertex3fv(vertices[i]);
-    }
-    glEnd();
-}
-
-void submerged() {
-    const Color slate{.21f,.29f,.30f};
-    for (int x = -6; x < 6; ++x) {
-        const float floorY = -.42f - .55f*((x+6)/4);
-        for (int z = -4; z < 4; ++z) {
-            const Color tile = ((x+z)%2 == 0) ? Color{.50f,.71f,.64f} : Color{.34f,.57f,.54f};
-            box(float(x),-2,float(z),1,2+floorY,1,tile);
-        }
-    }
-    box(-3,-.42f,1,1.2f,.24f,.75f,slate);
-    box(3,-1.52f,-1,1.3f,.66f,.8f,slate);
-}
-
-void banks() {
-    const Color paving{.81f,.76f,.63f};
-    // Four solid banks leave an opening for the submerged floor.
-    box(-12,-2,-12,24,2.25f,8,paving);
-    box(-12,-2,4,24,2.25f,8,paving);
-    box(-12,-2,-4,6,2.25f,8,paving);
-    box(6,-2,-4,6,2.25f,8,paving);
-}
-
-void courtyard() {
-    const Color paving{.81f,.76f,.63f}, plaster{.93f,.89f,.76f};
-    const Color timber{.45f,.21f,.14f}, slate{.21f,.29f,.30f};
-    banks();
-    box(-12,.25f,-10,24,2.6f,.4f,plaster);
-    box(-12,2.85f,-10.15f,24,.2f,.7f,slate);
-    box(-11,.25f,-10,.4f,2.6f,20,plaster);
-    box(-11.15f,2.85f,-10,.7f,.2f,20,slate);
-    // Open pavilion with stepped eaves and exposed crossbeams.
-    box(-4,.25f,-8,8,.3f,3.2f,paving);
-    for (float x : {-3.6f,0.f,3.4f})
-        for (float z : {-7.7f,-5.2f})
-            box(x,.55f,z,.22f,2.65f,.22f,timber);
-    box(-4,3.0f,-5.25f,8,.28f,.32f,timber);
-    for (int layer = 0; layer < 5; ++layer) {
-        float inset = .24f*layer;
-        box(-4.6f+inset,3.28f+.17f*layer,-8.6f+inset,
-            9.2f-2*inset,.18f,4.6f-2*inset,slate);
-    }
-}
 
 Target reflectionTarget, refractionTarget;
 
@@ -104,25 +43,29 @@ bool render(const Camera& c, const WaterState& water, int width, int height, int
     glEnable(GL_CLIP_PLANE0);
     // Courtyard geometry is two-sided; the mirror reverses winding.
     glDisable(GL_CULL_FACE);
-    courtyard();
+    scene::courtyard();
     glDisable(GL_CLIP_PLANE0);
     glPopMatrix();
     if (timing) { glFinish(); timing->reflection += glfwGetTime()-start; start = glfwGetTime(); }
     refractionTarget.bind();
     glClearColor(0,0,0,0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    const GLdouble below[] = {0,-1,0,0};
+    // A crest can cover the inside of the pool wall above mean water level.
+    // Clipping at zero there removes the near face and exposes distant back faces.
+    // Only perimeter and submerged geometry participate in this pass.
+    constexpr double crestBound = .052+.031+.019; // Sum of the three wave heights in water.cpp.
+    const GLdouble below[] = {0,-1,0,water.amplitude*crestBound};
     glClipPlane(GL_CLIP_PLANE0,below);
     glEnable(GL_CLIP_PLANE0);
-    banks();
-    submerged();
+    scene::banks();
+    scene::submerged();
     glDisable(GL_CLIP_PLANE0);
     if (timing) { glFinish(); timing->refraction += glfwGetTime()-start; start = glfwGetTime(); }
     bindScreen(width,height);
     glClearColor(.73f,.84f,.86f,1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    courtyard();
-    submerged();
+    scene::courtyard();
+    scene::submerged();
     drawWater(water,c.x,c.y,c.z,reflectionTarget.color,refractionTarget.color,refractionTarget.depth);
     if (timing) { glFinish(); timing->finalScene += glfwGetTime()-start; }
     return true;
@@ -193,6 +136,7 @@ int main(int argc, char** argv) {
         else if (mode == "no-distortion") water.distortion = false;
         else if (mode == "fixed-blend") water.fresnel = false;
         else if (mode == "depth") water.debugView = 3;
+        else if (mode == "coverage") water.debugView = 4;
         else if (mode != "full") snapshot = false;
     }
     if (snapshot && argc == 7) {
