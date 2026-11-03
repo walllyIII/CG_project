@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include "scene.h"
+#include "shader.h"
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -34,6 +35,7 @@ bool render(const Camera& c, const WaterState& water, int width, int height, int
     glRotated(-c.pitch,1,0,0);
     glRotated(c.yaw,0,1,0);
     glTranslated(-c.x,-c.y,-c.z);
+    scene::bindMaterials();
     reflectionTarget.bind();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glPushMatrix();
@@ -144,6 +146,7 @@ int main(int argc, char** argv) {
         if (view == "grazing") camera = {2.5,1.25,6,-15,-7};
         else if (view == "top") camera = {0,10,2,0,-77};
         else if (view == "edge") camera = {5.8,1.8,3.6,-45,-32};
+        else if (view == "shore") camera = {4.9,1.45,6.8,-22,-22};
         else if (view != "default") snapshot = false;
     }
     if (!benchmark && !snapshot && argc != 1) {
@@ -158,7 +161,8 @@ int main(int argc, char** argv) {
     GLFWwindow* window = glfwCreateWindow(1280,720,"Courtyard Reflections",nullptr,nullptr);
     if (!window) { glfwTerminate(); return 1; }
     glfwMakeContextCurrent(window);
-    if (!initializeTargets() || !initializeWater()) {
+    if (!initializeTargets() || !shader::initialize() || !initializeWater() || !scene::initialize()) {
+        scene::release();
         releaseWater();
         glfwTerminate();
         return 1;
@@ -215,6 +219,7 @@ int main(int argc, char** argv) {
         glfwSwapBuffers(window);
     }
     releaseWater();
+    scene::release();
     refractionTarget.release();
     reflectionTarget.release();
     glfwDestroyWindow(window);

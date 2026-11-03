@@ -1,4 +1,5 @@
 #include "water.h"
+#include "shader.h"
 #ifdef __APPLE__
 #include <OpenGL/glext.h>
 #else
@@ -11,19 +12,6 @@
 namespace {
 // OpenGL 2 entry points are loaded after GLFW makes the context current.
 #define GL_ENTRY(type, name) type name = nullptr
-GL_ENTRY(PFNGLCREATESHADERPROC, createShader);
-GL_ENTRY(PFNGLSHADERSOURCEPROC, shaderSource);
-GL_ENTRY(PFNGLCOMPILESHADERPROC, compileShader);
-GL_ENTRY(PFNGLGETSHADERIVPROC, getShader);
-GL_ENTRY(PFNGLGETSHADERINFOLOGPROC, shaderLog);
-GL_ENTRY(PFNGLDELETESHADERPROC, deleteShader);
-GL_ENTRY(PFNGLCREATEPROGRAMPROC, createProgram);
-GL_ENTRY(PFNGLATTACHSHADERPROC, attachShader);
-GL_ENTRY(PFNGLLINKPROGRAMPROC, linkProgram);
-GL_ENTRY(PFNGLGETPROGRAMIVPROC, getProgram);
-GL_ENTRY(PFNGLGETPROGRAMINFOLOGPROC, programLog);
-GL_ENTRY(PFNGLUSEPROGRAMPROC, useProgram);
-GL_ENTRY(PFNGLDELETEPROGRAMPROC, deleteProgram);
 GL_ENTRY(PFNGLGETUNIFORMLOCATIONPROC, uniformLocation);
 GL_ENTRY(PFNGLUNIFORM1FPROC, uniform1f);
 GL_ENTRY(PFNGLUNIFORM3FPROC, uniform3f);
@@ -126,64 +114,23 @@ void main() {
 }
 )GLSL";
 
-GLuint compile(GLenum type, const char* source) {
-    GLuint shader = createShader(type);
-    shaderSource(shader,1,&source,nullptr);
-    compileShader(shader);
-    GLint ok;
-    getShader(shader,GL_COMPILE_STATUS,&ok);
-    if (ok) return shader;
-    char message[2048]{};
-    shaderLog(shader,sizeof(message),nullptr,message);
-    std::cerr << message << '\n';
-    deleteShader(shader);
-    return 0;
-}
 }
 
 bool initializeWater() {
 #define LOAD(name, symbol) name = reinterpret_cast<decltype(name)>(glfwGetProcAddress(symbol)); if (!name) { std::cerr << "Missing " << symbol << '\n'; return false; }
-    LOAD(createShader,"glCreateShader")
-    LOAD(shaderSource,"glShaderSource")
-    LOAD(compileShader,"glCompileShader")
-    LOAD(getShader,"glGetShaderiv")
-    LOAD(shaderLog,"glGetShaderInfoLog")
-    LOAD(deleteShader,"glDeleteShader")
-    LOAD(createProgram,"glCreateProgram")
-    LOAD(attachShader,"glAttachShader")
-    LOAD(linkProgram,"glLinkProgram")
-    LOAD(getProgram,"glGetProgramiv")
-    LOAD(programLog,"glGetProgramInfoLog")
-    LOAD(useProgram,"glUseProgram")
-    LOAD(deleteProgram,"glDeleteProgram")
     LOAD(uniformLocation,"glGetUniformLocation")
     LOAD(uniform1f,"glUniform1f")
     LOAD(uniform3f,"glUniform3f")
     LOAD(activeTexture,"glActiveTexture")
     LOAD(uniform1i,"glUniform1i")
 #undef LOAD
-    GLuint vert = compile(GL_VERTEX_SHADER,vertexSource);
-    GLuint frag = compile(GL_FRAGMENT_SHADER,fragmentSource);
-    if (!vert || !frag) { deleteShader(vert); deleteShader(frag); return false; }
-    program = createProgram();
-    attachShader(program,vert);
-    attachShader(program,frag);
-    linkProgram(program);
-    deleteShader(vert);
-    deleteShader(frag);
-    GLint ok;
-    getProgram(program,GL_LINK_STATUS,&ok);
-    if (!ok) {
-        char message[2048]{};
-        programLog(program,sizeof(message),nullptr,message);
-        std::cerr << message << '\n';
-        return false;
-    }
-    useProgram(program);
+    program = shader::build(vertexSource,fragmentSource);
+    if (!program) return false;
+    shader::bind(program);
     uniform1i(uniformLocation(program,"reflectionMap"),1);
     uniform1i(uniformLocation(program,"transmissionMap"),2);
     uniform1i(uniformLocation(program,"depthMap"),3);
-    useProgram(0);
+    shader::bind(0);
     timeLoc = uniformLocation(program,"t");
     ampLoc = uniformLocation(program,"amplitude");
     headingLoc = uniformLocation(program,"heading");
@@ -229,7 +176,7 @@ bool initializeWater() {
 void drawWater(const WaterState& s, float x, float y, float z, GLuint reflection, GLuint transmission, GLuint depth) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-    useProgram(program);
+    shader::bind(program);
     uniform1f(timeLoc,s.time);
     uniform1f(ampLoc,s.amplitude);
     uniform1f(headingLoc,s.heading);
@@ -246,12 +193,12 @@ void drawWater(const WaterState& s, float x, float y, float z, GLuint reflection
     glBindTexture(GL_TEXTURE_2D,depth);
     activeTexture(GL_TEXTURE0);
     glCallList(grid);
-    useProgram(0);
+    shader::bind(0);
     glDisable(GL_BLEND);
 }
 
 void releaseWater() {
     if (grid) glDeleteLists(grid,1);
     if (normalTexture) glDeleteTextures(1,&normalTexture);
-    if (program) deleteProgram(program);
+    if (program) shader::release(program);
 }
