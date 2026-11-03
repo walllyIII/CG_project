@@ -32,4 +32,22 @@ Deliver a runnable scene, an approximately two-minute video, fixed-view effect c
 
 Individual responsibilities await team confirmation. All five members participate in integration reviews and write the project report.
 
-The repository is at the planning stage. Begin with the graybox discovery view. See the [four-week execution plan](DEVELOPMENT_PLAN.md) for milestones and acceptance checks.
+## Run the discovery graybox
+
+The first playable checkpoint uses the previous course project's CMake, GLFW and compatibility OpenGL approach. Install CMake 3.16 or later, a C++17 compiler and an OpenGL driver supporting a 2.1 compatibility context. CMake uses an installed GLFW package when available and otherwise fetches GLFW 3.4. To build offline with an existing GLFW source tree, add `-DFETCHCONTENT_SOURCE_DIR_GLFW=<path>` at configuration time.
+
+On Windows with MinGW, run these commands from the repository root:
+
+```powershell
+cmake -S . -B build -G "MinGW Makefiles"
+cmake --build build -j
+.\build\wrecklight.exe
+```
+
+Swim with WASD, look with the mouse, ascend with Space and descend with Left Ctrl. Press R to restore the discovery view and Esc to exit. To reproduce the starting image directly from the framebuffer, run `./build/wrecklight.exe --capture build/discovery.ppm`.
+
+### Composition review · awaiting teammate feedback
+
+Show only the [unlabelled starting frame](docs/discovery.png) to a teammate who did not build the scene. Before describing the project, ask them to name what they see, point to where they would swim first and explain which shape guided that choice. Record the first response and the indicated location. If either the wreck or the approach-side breach is unclear, revise the silhouette or route and repeat before starting final assets.
+
+The graybox uses flat materials and simple distance fog. See the [four-week execution plan](DEVELOPMENT_PLAN.md) for the later rendering milestones.
