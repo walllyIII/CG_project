@@ -29,7 +29,7 @@ void spar(Point a,Point b,double ra,double rb,bool cap=true){
     }
 }
 void hull(){
-    glColor3f(.38f,.40f,.40f);
+    glTexCoord2f(.55f,0);glColor3f(.27f,.13f,.061f);
     const double stations[]={-8,-6,-3,0,2,5,8,9};
     const double beam[]={1.5,2.2,2.45,2.5,2.45,2.05,.9,.08};
     const double rim[]={4.4,4.0,3.6,3.55,3.55,3.8,4.25,4.75};
@@ -51,7 +51,7 @@ void hull(){
         }
     }
     face({{-6.85,.12,-.36},{-6.85,.12,.36},{-8,4.4,1.5},{-8,4.4,-1.5}});
-    glColor3f(.31f,.33f,.33f);
+    glColor3f(.23f,.11f,.05f);
     spar({-2.8,1,0},{-4.4,8.25,.25},.32,.20);
     spar({-4.3,7.6,.2},{-5.15,8.75,.22},.14,.018);
     spar({-7.3,6.75,.32},{-.8,5.95,.30},.14,.10);
@@ -63,7 +63,7 @@ void cannon(){
     glPushMatrix();
     glTranslated(1.12,2.53,.12);
     glRotated(-18,0,1,0);
-    glColor3f(.29f,.28f,.26f);
+    glTexCoord2f(.60f,0);glColor3f(.20f,.09f,.04f);
     for(double x:{-.31,.31}){
         spar({x,-.38,-.76},{x,-.38,.50},.17,.17);
         for(double z:{-.59,.38}){
@@ -71,7 +71,7 @@ void cannon(){
             spar({x,-.57,z},{x+side*.20,-.57,z},.22,.22);
         }
     }
-    glColor3f(.22f,.24f,.25f);
+    glTexCoord2f(.26f,.95f);glColor3f(.33f,.36f,.37f);
     spar({0,0,-1.22},{0,0,1.18},.40,.29,false);
     spar({0,0,-1.27},{0,0,-1.08},.43,.43);
     spar({0,0,-.62},{0,0,-.53},.42,.42);
@@ -88,13 +88,13 @@ void cannon(){
         face({{0,0,.88},rim(i,.21,.88),rim(i+1,.21,.88)});
     }
     glPopMatrix();
-    glColor3f(.33f,.34f,.34f);
+    glTexCoord2f(.58f,0);glColor3f(.18f,.085f,.037f);
     face({{-.72,1.74,-1.6},{-.72,1.74,1.5},{2.75,1.74,1.5},{2.75,1.74,-1.6}});
 }
 void anchor(){
     glPushMatrix();glTranslated(-2.9,.18,5.6);glRotated(-22,0,1,0);
     glRotated(20,1,0,0);
-    glColor3f(.24f,.26f,.26f);
+    glTexCoord2f(.56f,.62f);glColor3f(.24f,.26f,.26f);
     spar({0,0,0},{0,.15,-2.05},.14,.11);
     spar({-.65,.12,-1.52},{.65,.12,-1.52},.09,.09);
     for(int s:{-1,1}){
@@ -114,7 +114,7 @@ void drawGraybox(){
     // Low relief on a neutral seabed provides scale without finished materials.
     for(int z=-70;z<36;z+=2) for(int x=-60;x<60;x+=2){
         double shade=.55+.004*std::sin(x*.72+z*.57);
-        glColor3d(shade,shade+.012,shade+.008);
+        glTexCoord2f(.93f,0);glColor3d(shade,shade*.79,shade*.49);
         Point a{x*1.,bed(x,z),z*1.}, b{x*1.,bed(x,z+2),z+2.},
               c{x+2.,bed(x+2,z+2),z+2.}, d{x+2.,bed(x+2,z),z*1.};
         face({a,b,c});face({a,c,d});
@@ -123,7 +123,7 @@ void drawGraybox(){
     hull();cannon();glPopMatrix();
     anchor();
     // A few exposed chain links lead from the anchor ring toward the gap.
-    glColor3f(.32f,.33f,.33f);
+    glTexCoord2f(.60f,.55f);glColor3f(.32f,.33f,.33f);
     for(int i=0;i<32;++i){
         double z=3.4-i*.34, x=-2.1+i*.105;
         double y=bed(x,z)+.055+1.03*std::exp(-.52*i);

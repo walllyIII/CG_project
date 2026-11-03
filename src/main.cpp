@@ -1,4 +1,5 @@
 #include <GLFW/glfw3.h>
+#include "effects.h"
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -25,7 +26,7 @@ Camera routePose(int frame){
     auto mix=[&](double x,double y){return x+(y-x)*t;};
     return {mix(a.x,b.x),mix(a.y,b.y),mix(a.z,b.z),mix(a.yaw,b.yaw),mix(a.pitch,b.pitch)};
 }
-struct Viewer {Camera camera;double mx=0,my=0;bool first=true;};
+struct Viewer {Camera camera;Effects effects;double mx=0,my=0;bool first=true;};
 void look(GLFWwindow* w,double x,double y){
     auto &v=*static_cast<Viewer*>(glfwGetWindowUserPointer(w));
     if(!v.first){
@@ -47,8 +48,16 @@ void move(GLFWwindow* w,Camera &c,double dt){
     c.z+=(-std::cos(yaw)*f+std::sin(yaw)*s)*speed;
     c.y=std::clamp(c.y+(key(GLFW_KEY_SPACE)-key(GLFW_KEY_LEFT_CONTROL))*3.2*dt,.4,18.);
 }
-void render(const Camera &c,int w,int h){
-    const GLfloat water[]={.19f,.34f,.37f,1};
+void toggle(GLFWwindow* w,int key,int,int action,int){
+    if(action!=GLFW_PRESS) return;
+    auto &e=static_cast<Viewer*>(glfwGetWindowUserPointer(w))->effects;
+    if(key==GLFW_KEY_F) e.lamp=!e.lamp;
+    if(key==GLFW_KEY_C) e.caustics=!e.caustics;
+    if(key==GLFW_KEY_V) e.water=!e.water;
+    if(key==GLFW_KEY_H) e.shadows=!e.shadows;
+}
+void render(const Camera &c,int w,int h,const Effects& effects,double time){
+    const GLfloat water[]={.212f,.370f,.402f,1};
     glClearColor(water[0],water[1],water[2],1);
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
     glViewport(0,0,w,h);
@@ -57,13 +66,7 @@ void render(const Camera &c,int w,int h){
     glFrustum(-right,right,-top,top,.1,110);
     glMatrixMode(GL_MODELVIEW);glLoadIdentity();
     glRotated(-c.pitch,1,0,0);glRotated(c.yaw,0,1,0);glTranslated(-c.x,-c.y,-c.z);
-    const GLfloat light[]={-.48f,1,.65f,0},ambient[]={.43f,.45f,.45f,1};
-    glEnable(GL_DEPTH_TEST);glEnable(GL_LIGHTING);glEnable(GL_LIGHT0);
-    glEnable(GL_COLOR_MATERIAL);glLightfv(GL_LIGHT0,GL_POSITION,light);
-    glLightModelfv(GL_LIGHT_MODEL_AMBIENT,ambient);
-    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE,GL_TRUE);
-    glEnable(GL_FOG);glFogi(GL_FOG_MODE,GL_LINEAR);glFogfv(GL_FOG_COLOR,water);
-    glFogf(GL_FOG_START,6);glFogf(GL_FOG_END,54);
+    bindEffects(effects,time,c.x,c.y,c.z,c.yaw,c.pitch);
     drawGraybox();
 }
 // PPM keeps the framebuffer capture independent of image-library dependencies.
@@ -80,27 +83,59 @@ bool capture(const char* path,int w,int h){
 int main(int argc,char** argv){
     bool snapshot=argc==3 && std::string(argv[1])=="--capture";
     bool route=argc==3 && std::string(argv[1])=="--route";
-    if(route) std::filesystem::create_directories(argv[2]);
-    if(argc!=1 && !snapshot && !route){std::cerr<<"Usage: wrecklight [--capture image.ppm | --route output_directory]\n";return 2;}
+    bool review=argc==3 && std::string(argv[1])=="--review";
+    if(route || review) std::filesystem::create_directories(argv[2]);
+    if(argc!=1 && !snapshot && !route && !review){std::cerr<<"Usage: wrecklight [--capture image.ppm | --route output_directory | --review output_directory]\n";return 2;}
     glfwSetErrorCallback([](int,const char* msg){std::cerr<<msg<<'\n';});
     if(!glfwInit()) return 1;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,2);glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,1);
-    glfwWindowHint(GLFW_VISIBLE,(snapshot || route)?GLFW_FALSE:GLFW_TRUE);
+    glfwWindowHint(GLFW_VISIBLE,(snapshot || route || review)?GLFW_FALSE:GLFW_TRUE);
     auto* w=glfwCreateWindow(1280,720,"Wrecklight | Discovery graybox",nullptr,nullptr);
     if(!w){glfwTerminate();return 1;}
     glfwMakeContextCurrent(w);glfwSwapInterval(route?0:1);
     std::cout<<"OpenGL "<<glGetString(GL_VERSION)<<" / "<<glGetString(GL_RENDERER)<<'\n';
+    if(!initEffects()){std::cerr<<"Underwater renderer initialization failed\n";glfwTerminate();return 1;}
     Viewer viewer;glfwSetWindowUserPointer(w,&viewer);
-    if(!snapshot && !route){glfwSetInputMode(w,GLFW_CURSOR,GLFW_CURSOR_DISABLED);glfwSetCursorPosCallback(w,look);}
+    glfwSetKeyCallback(w,toggle);
+    if(!snapshot && !route && !review){glfwSetInputMode(w,GLFW_CURSOR,GLFW_CURSOR_DISABLED);glfwSetCursorPosCallback(w,look);}
     double last=glfwGetTime();bool ok=true;int frame=0;
+    struct Comparison {const char* name; int view; Effects effects; double time;};
+    const Comparison checks[]={
+        {"far-water",0,{},4},{"far-clear",0,{false,true,true,false},4},
+        {"mid-lit",1,{},4},{"mid-no-caustics",1,{true,false,true,false},4},
+        {"mid-later",1,{},8},{"mid-no-shadows",1,{true,true,false,false},4},
+        {"near-dark",2,{},4},{"near-lamp",2,{true,true,true,true},4},
+        {"near-oblique",2,{true,true,true,true},4},
+        {"plank-near",2,{true,false,true,false},4},
+        {"plank-middle",2,{true,false,true,false},4},
+        {"plank-far",2,{true,false,true,false},4}
+    };
     while(!glfwWindowShouldClose(w)){
         glfwPollEvents();double now=glfwGetTime();
-        if(route) viewer.camera=routePose(frame);
+        if(review){
+            viewer.camera=views[checks[frame].view];
+            viewer.effects=checks[frame].effects;
+            std::string shot=checks[frame].name;
+            if(shot=="near-oblique") viewer.camera={1.45,3.30,-5.55,-12,-18};
+            if(shot.rfind("plank-",0)==0){
+                double distance=shot=="plank-near"?3:(shot=="plank-middle"?10:22);
+                // Look straight at a fixed point on the starboard plank, across all distances.
+                viewer.camera={3.8,2.45,-6.25+distance,0,0};
+            }
+        }else if(route){
+            viewer.camera=routePose(frame);viewer.effects.lamp=frame>=1050;
+        }
         else if(!snapshot) move(w,viewer.camera,std::min(now-last,.05));
         last=now;
         int width,height;glfwGetFramebufferSize(w,&width,&height);
         if(width<1 || height<1){glfwWaitEventsTimeout(.05);continue;}
-        render(viewer.camera,width,height);
+        double time=review?checks[frame].time:(route?frame*.1:(snapshot?0.:now));
+        render(viewer.camera,width,height,viewer.effects,time);
+        if(review){
+            auto path=std::filesystem::path(argv[2])/(std::string(checks[frame].name)+".ppm");
+            ok=capture(path.string().c_str(),width,height);
+            if(!ok || frame==int(sizeof(checks)/sizeof(checks[0]))-1) break;
+        }
         if(snapshot){ok=capture(argv[2],width,height);break;}
         if(route && frame%600==0){
             int view=frame/600;
@@ -112,5 +147,5 @@ int main(int argc,char** argv){
         glfwSwapBuffers(w);
         ++frame;
     }
-    glfwDestroyWindow(w);glfwTerminate();return ok?0:1;
+    releaseEffects();glfwDestroyWindow(w);glfwTerminate();return ok?0:1;
 }

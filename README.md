@@ -32,9 +32,9 @@ Deliver a runnable scene, an approximately two-minute video, fixed-view effect c
 
 Individual responsibilities await team confirmation. All five members participate in integration reviews and write the project report.
 
-## Run the week-one graybox
+## Run the underwater scene
 
-The first playable checkpoint uses the previous course project's CMake, GLFW and compatibility OpenGL approach. Install CMake 3.16 or later, a C++17 compiler and an OpenGL driver supporting a 2.1 compatibility context. CMake uses an installed GLFW package when available and otherwise fetches GLFW 3.4. To build offline with an existing GLFW source tree, add `-DFETCHCONTENT_SOURCE_DIR_GLFW=<path>` at configuration time.
+The renderer uses the previous course project's CMake, GLFW and compatibility OpenGL approach. Install CMake 3.16 or later, a C++17 compiler and an OpenGL driver supporting a 2.1 compatibility context with framebuffer objects. CMake uses an installed GLFW package when available and otherwise fetches GLFW 3.4. To build offline with an existing GLFW source tree, add `-DFETCHCONTENT_SOURCE_DIR_GLFW=<path>` at configuration time.
 
 On Windows with MinGW, run these commands from the repository root:
 
@@ -64,4 +64,18 @@ The replay renders 1,201 frames along the exterior route using a fixed simulatio
 
 Record each reviewer's first answer before explaining the intended route. The technical playback has been checked on Intel Arc graphics. Teammate feedback is pending.
 
-The graybox uses flat materials and simple distance fog. See the [four-week execution plan](DEVELOPMENT_PLAN.md) for the later rendering milestones.
+The images above are the original week-one layout references. The current renderer adds RGB attenuation, moving projected caustics with sun shadows, and a metallic-roughness material model illuminated by a camera-mounted spotlight.
+
+## Week-two lighting review
+
+Toggle **V** for water attenuation, **C** for caustics, **H** for sun shadows and **F** for the dive lamp. Sun shadows, water and caustics start enabled. The interactive lamp starts off. Route replay switches it on during the final approach. The static hull and sunlight share a 1024-square directional depth map, sampled with a 3 x 3 visibility filter. Two scrolling layers sample a procedurally generated periodic caustic texture. Material response uses a GGX specular term, distinct roughness and metalness values, procedural surface relief and rust patches.
+
+Run `./build/wrecklight.exe --review build/review` to capture twelve 1280 x 720 PPM files with fixed lighting, cameras and animation times. The [effect comparison sheet](docs/week2/comparisons.png) shows the main toggles.
+
+| Check | Evidence and observation |
+| --- | --- |
+| Water | The same plank shifts from brown toward the water color in the [near](docs/week2/plank-near.png), [middle](docs/week2/plank-middle.png) and [far](docs/week2/plank-far.png) views. Mean 8-bit RGB in the central 11 x 11 pixels was (63, 60, 49), (59, 73, 65) and (56, 83, 79). |
+| Caustics | Compare [4 seconds](docs/week2/mid-lit.png) with [8 seconds](docs/week2/mid-later.png). The sand pattern moves and the hull shadow stays in place. [Disabling shadows](docs/week2/mid-no-shadows.png) lets bright lines appear beneath the ship. |
+| Dive lamp | Compare [lamp off](docs/week2/near-dark.png) and [lamp on](docs/week2/near-lamp.png) at the same pose, then inspect the [oblique view](docs/week2/near-oblique.png). Look for changes in the exposed muzzle, rust patches and surrounding wood. |
+
+The captures and full route were rendered on Intel Arc graphics. The model remains a blockout pending team review. The 1080p presentation-machine performance target still requires a timed run. See the [four-week execution plan](DEVELOPMENT_PLAN.md) for the later rendering milestones.
