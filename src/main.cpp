@@ -8,6 +8,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -16,6 +17,16 @@ constexpr double rad = 3.141592653589793 / 180.0;
 struct Camera {
     double x = 6.6, y = 4.5, z = 8.5;
     double yaw = -32, pitch = -18.5;
+};
+struct Preset { const char* name; Camera camera; };
+constexpr Preset presets[] = {
+    {"default",{}}, {"grazing",{2.5,1.25,6,-15,-7}}, {"top",{0,10,2,0,-77}},
+    {"edge",{5.8,1.8,3.6,-45,-32}}, {"shore",{4.9,1.45,6.8,-22,-22}}
+};
+struct Demo {
+    Camera camera;
+    WaterState water;
+    unsigned preset = 0;
 };
 
 Target reflectionTarget, refractionTarget;
@@ -79,8 +90,23 @@ bool render(const Camera& c, const WaterState& water, int width, int height, int
 
 void waterKey(GLFWwindow* window, int key, int, int action, int) {
     if (action == GLFW_RELEASE) return;
-    auto& water = *static_cast<WaterState*>(glfwGetWindowUserPointer(window));
+    auto& demo = *static_cast<Demo*>(glfwGetWindowUserPointer(window));
+    auto& water = demo.water;
     switch (key) {
+        case GLFW_KEY_R: demo.preset = 0; break;
+        case GLFW_KEY_F5:
+            if (action == GLFW_PRESS) {
+                demo = Demo{};
+                water.paused = true;
+                water.time = 1.f;
+            }
+            break;
+        case GLFW_KEY_F6:
+            if (action == GLFW_PRESS) {
+                demo.preset = (demo.preset+1) % std::size(presets);
+                demo.camera = presets[demo.preset].camera;
+            }
+            break;
         case GLFW_KEY_1: if (action == GLFW_PRESS) water.reflection = !water.reflection; break;
         case GLFW_KEY_2: if (action == GLFW_PRESS) water.distortion = !water.distortion; break;
         case GLFW_KEY_3: if (action == GLFW_PRESS) water.fresnel = !water.fresnel; break;
@@ -126,13 +152,56 @@ bool capture(const char* path, int w, int h) {
     file.close();
     return file.good() && glGetError() == GL_NO_ERROR;
 }
+
+// Exercise the interactive render / swap path. Do not read back pixels or
+// serialize individual passes inside this wall-clock measurement.
+bool measureVisibleWindow(GLFWwindow* window) {
+    constexpr int width = 1280, height = 720;
+    constexpr double duration = 10.0;
+    const Camera camera;
+    WaterState water;
+    std::vector<double> frameMs;
+    double animationStart = glfwGetTime(), start = 0, elapsed = 0;
+    for (int frame = -60; elapsed < duration; ++frame) {
+        double begin = glfwGetTime();
+        if (frame == 0) start = begin;
+        glfwPollEvents();
+        int w, h;
+        glfwGetFramebufferSize(window,&w,&h);
+        if (w != width || h != height || glfwWindowShouldClose(window) ||
+            !glfwGetWindowAttrib(window,GLFW_VISIBLE) || glfwGetWindowAttrib(window,GLFW_ICONIFIED)) {
+            std::cerr << "Visible benchmark interrupted or framebuffer size changed\n";
+            return false;
+        }
+        water.time = static_cast<float>(begin-animationStart);
+        if (!render(camera,water,width,height)) return false;
+        glfwSwapBuffers(window);
+        if (frame >= 0) {
+            double end = glfwGetTime();
+            frameMs.push_back((end-begin)*1000);
+            elapsed = end-start;
+        }
+    }
+    std::sort(frameMs.begin(),frameMs.end());
+    double fps = frameMs.size()/elapsed;
+    size_t p95 = static_cast<size_t>(std::ceil(.95*frameMs.size()))-1;
+    std::cout << "Visible 1280x720, full resolution, swap interval 1 | "
+              << glGetString(GL_RENDERER) << " | " << glGetString(GL_VERSION) << '\n'
+              << frameMs.size() << " frames in " << elapsed << " s, " << fps << " FPS, "
+              << 1000/fps << " ms/frame, p95 " << frameMs[p95] << " ms | "
+              << (fps >= 30 ? "PASS" : "FAIL") << " (30 FPS mean)\n";
+    return fps >= 30 && glGetError() == GL_NO_ERROR;
+}
 } // namespace
 
 int main(int argc, char** argv) {
-    WaterState water;
-    Camera camera;
+    Demo demo;
+    WaterState& water = demo.water;
+    Camera& camera = demo.camera;
+    bool visibleBenchmark = argc == 3 && std::string(argv[1]) == "--benchmark" &&
+                            std::string(argv[2]) == "visible";
     bool benchmark = argc >= 2 && std::string(argv[1]) == "--benchmark" &&
-                     (argc == 2 || (argc == 3 && std::string(argv[2]) == "half"));
+                     (argc == 2 || visibleBenchmark || (argc == 3 && std::string(argv[2]) == "half"));
     bool snapshot = argc >= 3 && argc <= 7 && std::string(argv[1]) == "--capture";
     if (snapshot && argc >= 4) snapshot = parseNumber(argv[3],2,water.amplitude);
     if (snapshot && argc >= 5) snapshot = parseNumber(argv[4],86400,water.time);
@@ -147,22 +216,25 @@ int main(int argc, char** argv) {
         else if (mode != "full") snapshot = false;
     }
     if (snapshot && argc == 7) {
-        std::string view = argv[6];
-        if (view == "grazing") camera = {2.5,1.25,6,-15,-7};
-        else if (view == "top") camera = {0,10,2,0,-77};
-        else if (view == "edge") camera = {5.8,1.8,3.6,-45,-32};
-        else if (view == "shore") camera = {4.9,1.45,6.8,-22,-22};
-        else if (view != "default") snapshot = false;
+        snapshot = false;
+        for (const auto& preset : presets) {
+            if (std::string(argv[6]) == preset.name) {
+                camera = preset.camera;
+                snapshot = true;
+                break;
+            }
+        }
     }
     if (!benchmark && !snapshot && argc != 1) {
-        std::cerr << "Usage: courtyard [--capture output.ppm [amplitude 0..2 [seconds 0..86400 [mode [view]]]]] or --benchmark [half]\n";
+        std::cerr << "Usage: courtyard [--capture output.ppm [amplitude 0..2 [seconds 0..86400 [mode [view]]]]] or --benchmark [half|visible]\n";
         return 1;
     }
     glfwSetErrorCallback([](int, const char* message) { std::cerr << message << '\n'; });
     if (!glfwInit()) return 1;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,1);
-    if (snapshot || benchmark) glfwWindowHint(GLFW_VISIBLE,GLFW_FALSE);
+    if (snapshot || (benchmark && !visibleBenchmark)) glfwWindowHint(GLFW_VISIBLE,GLFW_FALSE);
+    if (visibleBenchmark) glfwWindowHint(GLFW_RESIZABLE,GLFW_FALSE);
     GLFWwindow* window = glfwCreateWindow(1280,720,"Courtyard Reflections",nullptr,nullptr);
     if (!window) { glfwTerminate(); return 1; }
     glfwMakeContextCurrent(window);
@@ -172,13 +244,15 @@ int main(int argc, char** argv) {
         glfwTerminate();
         return 1;
     }
-    glfwSetWindowUserPointer(window,&water);
+    glfwSetWindowUserPointer(window,&demo);
     glfwSetKeyCallback(window,waterKey);
-    glfwSwapInterval(benchmark ? 0 : 1);
+    glfwSwapInterval(benchmark && !visibleBenchmark ? 0 : 1);
     glEnable(GL_DEPTH_TEST);
     double last = glfwGetTime();
     int result = 0;
-    if (benchmark) {
+    if (visibleBenchmark) {
+        result = measureVisibleWindow(window) ? 0 : 1;
+    } else if (benchmark) {
         int w,h;
         glfwGetFramebufferSize(window,&w,&h);
         int divisor = argc == 3 ? 2 : 1;

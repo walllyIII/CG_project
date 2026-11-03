@@ -4,9 +4,9 @@
 
 在一个可漫游的庭院里，用同一片平静水面观察三种变化：抬低视角时墙体倒影的强弱、浅岸石纹随波纹产生的扭曲，以及池底从浅到深的颜色过渡。有限的池岸和容易辨认的几何物体也提供了检查倒影错位、采样越界和深度错误的参照。
 
-**当前进度 · 听雨小院 B 阶段**　水榭已铺灰瓦，木构、粉墙和湿青石有各自的表面纹理。漏窗后可见疏竹，南岸前三阶和西侧沉石上的脉纹用于观察折射。[材质总览、折射对照与复现命令](docs/stage-b/README.md) · [A 阶段空间灰模](docs/stage-a/README.md)
+**最终演示 · 听雨小院**　平静的青绿池面保留柱影和浅岸石纹。指定演示机在 1280 × 720 全效果可见窗口两次实测均为 **60.00 FPS**。运行后按 **F5** 锁定报告中的全效果帧，按 **F6** 切换观察机位。[演示步骤、四帧对照、多角度原图、出处与实测报告](docs/final/README.md)
 
-![水榭、疏竹、湿青石和水池总览](docs/stage-b/overview.png)
+![听雨小院全效果实渲](docs/final/full.png)
 
 原型阶段的动态波面、折射、深度吸收和 Fresnel 四帧对照见[原场景实验报告](docs/RESULTS.md)。
 ## 构建与运行
@@ -35,6 +35,7 @@ foreach ($mode in 'full','no-reflection','no-distortion','fixed-blend') {
     .\build\courtyard.exe --capture "build/$mode.ppm" 0.35 1 $mode default
 }
 .\build\courtyard.exe --capture build/edge.ppm 0.35 1 full edge
+.\build\courtyard.exe --benchmark visible
 .\build\courtyard.exe --benchmark
 .\build\courtyard.exe --benchmark half
 ```
