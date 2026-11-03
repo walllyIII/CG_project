@@ -28,13 +28,13 @@ cmake --build build --parallel
 
 按 **1** 切换倒影，**2** 切换折射扰动，**3** 在 Fresnel 和固定反射权重 0.32 之间切换。按 **4** 循环查看合成、反射、水下颜色和水中路径长度。**逗号 / 句号** 降低或提高吸收强度。
 
-截图命令按顺序接收输出路径、振幅、动画秒数、效果模式和机位。省略可选参数时使用振幅 1、时间 0、完整效果和默认机位。可选效果为 `full`、`no-reflection`、`no-distortion`、`fixed-blend`、`depth`、`coverage`（空深度检查），机位为 `default`、`top`、`grazing`、`edge`、`shore`（南岸铺地近景）。
+截图命令按顺序接收输出路径、振幅、动画秒数、效果模式和机位。省略可选参数时使用振幅 0.35、时间 0、完整效果和默认机位。可选效果为 `full`、`no-reflection`、`no-distortion`、`fixed-blend`、`no-absorption`、`depth`、`coverage`（空深度检查），机位为 `default`、`top`、`grazing`、`edge`、`shore`（南岸铺地近景）。
 
 ```powershell
 foreach ($mode in 'full','no-reflection','no-distortion','fixed-blend') {
-    .\build\courtyard.exe --capture "build/$mode.ppm" 1 1 $mode default
+    .\build\courtyard.exe --capture "build/$mode.ppm" 0.35 1 $mode default
 }
-.\build\courtyard.exe --capture build/edge.ppm 1 1 full edge
+.\build\courtyard.exe --capture build/edge.ppm 0.35 1 full edge
 .\build\courtyard.exe --benchmark
 .\build\courtyard.exe --benchmark half
 ```

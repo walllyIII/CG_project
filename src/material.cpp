@@ -79,6 +79,10 @@ void main() {
             c+=wet*sheen*(.045+.20*grazing*grazing)*vec3(.73,.84,.88);
         }
     }
+    vec3 face=normalize(cross(dFdx(viewPosition),dFdy(viewPosition)));
+    float side=max(dot(face,normalize(gl_LightSource[0].position.xyz)),0.0);
+    // Cool skylight with a small warm opening in the cloud cover.
+    c *= vec3(.93,.96,.98) + side*vec3(.14,.09,.045);
     gl_FragColor=vec4(c,1);
 }
 )GLSL";

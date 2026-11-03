@@ -71,10 +71,11 @@ vec3 eyePoint(vec2 uv,float d) {
 void main() {
     vec2 fine = detailSlope(world.xz*.63 + vec2(.035,-.017)*t)
               + detailSlope(world.xz*.91 + vec2(-.023,.028)*t)*.55;
-    vec2 grad = slope + amplitude*fine;
+    vec2 grad = slope + .78*amplitude*fine;
     vec3 n = normalize(vec3(-grad.x,1.0,-grad.y));
-    vec3 h = normalize(normalize(eye-world) + normalize(vec3(-.48,.48,-.73)));
-    float glint = pow(max(dot(n,h),0.0),85.0);
+    vec3 light = normalize(gl_LightSource[0].position.xyz);
+    vec3 halfVector = normalize(normalize(-(gl_ModelViewMatrix*vec4(world,1)).xyz) + light);
+    float glint = pow(max(dot(normalize(gl_NormalMatrix*n),halfVector),0.0),48.0);
     vec2 screenUV = sceneClip.xy/sceneClip.w*.5+.5;
     vec2 offset = clamp((gl_ModelViewMatrix*vec4(n-vec3(0,1,0),0)).xy*.035,
                         vec2(-.018),vec2(.018));
@@ -99,8 +100,8 @@ void main() {
     vec3 floorPoint = eyePoint(sampleUV,floorDepth);
     vec3 surfacePoint = (gl_ModelViewMatrix*vec4(world,1)).xyz;
     float path = length(floorPoint-surfacePoint);
-    vec3 attenuation = exp(-vec3(.51,.23,.15)*path*absorption);
-    vec3 transmitted = mix(vec3(.045,.29,.32),floorColor,attenuation);
+    vec3 attenuation = exp(-vec3(.64,.32,.48)*path*absorption);
+    vec3 transmitted = mix(vec3(.105,.247,.202),floorColor,attenuation);
     vec2 mirrorUV = mirrorClip.xy/mirrorClip.w*.5+.5+offset*.55;
     vec3 reflected = texture2D(reflectionMap,mirrorUV).rgb;
     float cosine = clamp(dot(normalize(eye-world),n),0.0,1.0);
@@ -109,7 +110,7 @@ void main() {
     if (debugView == 1) { gl_FragColor = vec4(reflected,1); return; }
     if (debugView == 2) { gl_FragColor = vec4(floorColor,1); return; }
     if (debugView == 3) { gl_FragColor = vec4(vec3(clamp(path/5.0,0.0,1.0)),1); return; }
-    gl_FragColor = vec4(mix(transmitted,reflected,weight)+vec3(.65,.62,.54)*glint,1);
+    gl_FragColor = vec4(mix(transmitted,reflected,weight)+vec3(.085,.080,.069)*glint,1);
 
 }
 )GLSL";

@@ -2,7 +2,7 @@
 #include <GLFW/glfw3.h>
 
 struct WaterState {
-    float amplitude = 1, heading = 0, time = 0;
+    float amplitude = .35f, heading = 0, time = 0;
     bool reflection = true, distortion = true, fresnel = true;
     int debugView = 0;
     float absorption = 1;

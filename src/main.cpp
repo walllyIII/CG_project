@@ -25,7 +25,9 @@ bool render(const Camera& c, const WaterState& water, int width, int height, int
     int rw = std::max(1,width/divisor), rh = std::max(1,height/divisor);
     double start = glfwGetTime();
     if (!reflectionTarget.resize(rw,rh) || !refractionTarget.resize(rw,rh)) return false;
-    glClearColor(.73f,.84f,.86f,1);
+    constexpr GLfloat sky[] = {.76f,.81f,.82f,1};
+    constexpr GLfloat sideLight[] = {-.62f,.48f,-.64f,0};
+    glClearColor(sky[0],sky[1],sky[2],sky[3]);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     double top = .1*std::tan(28*rad), right = top*width/height;
@@ -40,6 +42,7 @@ bool render(const Camera& c, const WaterState& water, int width, int height, int
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glPushMatrix();
     glScalef(1,-1,1);
+    glLightfv(GL_LIGHT0,GL_POSITION,sideLight);
     const GLdouble above[] = {0,1,0,0};
     glClipPlane(GL_CLIP_PLANE0,above);
     glEnable(GL_CLIP_PLANE0);
@@ -48,6 +51,7 @@ bool render(const Camera& c, const WaterState& water, int width, int height, int
     scene::courtyard();
     glDisable(GL_CLIP_PLANE0);
     glPopMatrix();
+    glLightfv(GL_LIGHT0,GL_POSITION,sideLight);
     if (timing) { glFinish(); timing->reflection += glfwGetTime()-start; start = glfwGetTime(); }
     refractionTarget.bind();
     glClearColor(0,0,0,0);
@@ -64,7 +68,7 @@ bool render(const Camera& c, const WaterState& water, int width, int height, int
     glDisable(GL_CLIP_PLANE0);
     if (timing) { glFinish(); timing->refraction += glfwGetTime()-start; start = glfwGetTime(); }
     bindScreen(width,height);
-    glClearColor(.73f,.84f,.86f,1);
+    glClearColor(sky[0],sky[1],sky[2],sky[3]);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     scene::courtyard();
     scene::submerged();
@@ -137,6 +141,7 @@ int main(int argc, char** argv) {
         if (mode == "no-reflection") water.reflection = false;
         else if (mode == "no-distortion") water.distortion = false;
         else if (mode == "fixed-blend") water.fresnel = false;
+        else if (mode == "no-absorption") water.absorption = 0;
         else if (mode == "depth") water.debugView = 3;
         else if (mode == "coverage") water.debugView = 4;
         else if (mode != "full") snapshot = false;
