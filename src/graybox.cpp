@@ -17,7 +17,7 @@ void face(std::initializer_list<Point> pts){
     for(Point v:pts) glVertex3d(v.x,v.y,v.z);
     glEnd();
 }
-void spar(Point a,Point b,double ra,double rb){
+void spar(Point a,Point b,double ra,double rb,bool cap=true){
     Point axis=unit(b-a);
     Point u=unit(cross(axis,std::abs(axis.y)<.9?Point{0,1,0}:Point{1,0,0}));
     Point v=cross(axis,u);
@@ -25,7 +25,7 @@ void spar(Point a,Point b,double ra,double rb){
         double s=i*pi/6,t=(i+1)*pi/6;
         Point e=u*std::cos(s)+v*std::sin(s), f=u*std::cos(t)+v*std::sin(t);
         face({a+e*ra,a+f*ra,b+f*rb,b+e*rb});
-        if(rb>0) face({b,b+e*rb,b+f*rb});
+        if(cap && rb>0) face({b,b+e*rb,b+f*rb});
     }
 }
 void hull(){
@@ -58,6 +58,39 @@ void hull(){
     spar({-6.9,6.7,.32},{-7.6,4.1,1.25},.045,.045);
     spar({-.85,5.95,.3},{1.2,3.1,-1.6},.05,.05);
 }
+void cannon(){
+    // All dimensions are ship-local. The muzzle ends inside the broken side.
+    glPushMatrix();
+    glTranslated(1.12,2.53,.12);
+    glRotated(-18,0,1,0);
+    glColor3f(.29f,.28f,.26f);
+    for(double x:{-.31,.31}){
+        spar({x,-.38,-.76},{x,-.38,.50},.17,.17);
+        for(double z:{-.59,.38}){
+            double side=x>0?1:-1;
+            spar({x,-.57,z},{x+side*.20,-.57,z},.22,.22);
+        }
+    }
+    glColor3f(.22f,.24f,.25f);
+    spar({0,0,-1.22},{0,0,1.18},.40,.29,false);
+    spar({0,0,-1.27},{0,0,-1.08},.43,.43);
+    spar({0,0,-.62},{0,0,-.53},.42,.42);
+    spar({0,0,1.07},{0,0,1.33},.35,.35,false);
+    // Model the annular lip and recessed bore so the opening reads at close range.
+    for(int i=0;i<12;++i){
+        auto rim=[](int j,double radius,double z){
+            return Point{radius*std::cos(j*pi/6),radius*std::sin(j*pi/6),z};
+        };
+        glColor3f(.34f,.35f,.35f);
+        face({rim(i,.35,1.33),rim(i+1,.35,1.33),rim(i+1,.21,1.33),rim(i,.21,1.33)});
+        glColor3f(.09f,.10f,.11f);
+        face({rim(i,.21,1.33),rim(i+1,.21,1.33),rim(i+1,.21,.88),rim(i,.21,.88)});
+        face({{0,0,.88},rim(i,.21,.88),rim(i+1,.21,.88)});
+    }
+    glPopMatrix();
+    glColor3f(.33f,.34f,.34f);
+    face({{-.72,1.74,-1.6},{-.72,1.74,1.5},{2.75,1.74,1.5},{2.75,1.74,-1.6}});
+}
 void anchor(){
     glPushMatrix();glTranslated(-2.9,.18,5.6);glRotated(-22,0,1,0);
     glRotated(20,1,0,0);
@@ -87,7 +120,7 @@ void drawGraybox(){
         face({a,b,c});face({a,c,d});
     }
     glPushMatrix();glTranslated(.6,-.48,-9.6);glRotated(-18,0,1,0);glRotated(-12,1,0,0);
-    hull();glPopMatrix();
+    hull();cannon();glPopMatrix();
     anchor();
     // A few exposed chain links lead from the anchor ring toward the gap.
     glColor3f(.32f,.33f,.33f);

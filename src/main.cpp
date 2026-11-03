@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -10,6 +11,20 @@ void drawGraybox();
 namespace {
 constexpr double rad=3.141592653589793/180;
 struct Camera {double x=0,y=3.25,z=12,yaw=0,pitch=-9;};
+constexpr Camera views[]={{}, {-1.35,2.45,2.5,12,-9}, {2.15,3.45,-5.65,-22,-20}};
+constexpr const char* names[]={"discovery","approach","inspection"};
+
+// Replay 120 seconds of camera travel on a fixed simulation clock. The same
+// poses drive the interactive bookmarks and the captured review frames.
+Camera routePose(int frame){
+    constexpr int legFrames=600;
+    int leg=std::min(frame/legFrames,1);
+    double t=double(frame-leg*legFrames)/legFrames;
+    t=t*t*(3-2*t);
+    const Camera &a=views[leg], &b=views[leg+1];
+    auto mix=[&](double x,double y){return x+(y-x)*t;};
+    return {mix(a.x,b.x),mix(a.y,b.y),mix(a.z,b.z),mix(a.yaw,b.yaw),mix(a.pitch,b.pitch)};
+}
 struct Viewer {Camera camera;double mx=0,my=0;bool first=true;};
 void look(GLFWwindow* w,double x,double y){
     auto &v=*static_cast<Viewer*>(glfwGetWindowUserPointer(w));
@@ -22,7 +37,9 @@ void look(GLFWwindow* w,double x,double y){
 void move(GLFWwindow* w,Camera &c,double dt){
     auto key=[&](int k){return glfwGetKey(w,k)==GLFW_PRESS;};
     if(key(GLFW_KEY_ESCAPE)) glfwSetWindowShouldClose(w,true);
-    if(key(GLFW_KEY_R)){c=Camera{};return;}
+    for(int i=0;i<3;++i){
+        if(key(GLFW_KEY_1+i) || (i==0 && key(GLFW_KEY_R))){c=views[i];return;}
+    }
     double yaw=c.yaw*rad;
     double f=key(GLFW_KEY_W)-key(GLFW_KEY_S), s=key(GLFW_KEY_D)-key(GLFW_KEY_A);
     double speed=3.2*dt/std::max(1.,std::hypot(f,s));
@@ -62,27 +79,38 @@ bool capture(const char* path,int w,int h){
 }
 int main(int argc,char** argv){
     bool snapshot=argc==3 && std::string(argv[1])=="--capture";
-    if(argc!=1 && !snapshot){std::cerr<<"Usage: wrecklight [--capture image.ppm]\n";return 2;}
+    bool route=argc==3 && std::string(argv[1])=="--route";
+    if(route) std::filesystem::create_directories(argv[2]);
+    if(argc!=1 && !snapshot && !route){std::cerr<<"Usage: wrecklight [--capture image.ppm | --route output_directory]\n";return 2;}
     glfwSetErrorCallback([](int,const char* msg){std::cerr<<msg<<'\n';});
     if(!glfwInit()) return 1;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,2);glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,1);
-    glfwWindowHint(GLFW_VISIBLE,snapshot?GLFW_FALSE:GLFW_TRUE);
+    glfwWindowHint(GLFW_VISIBLE,(snapshot || route)?GLFW_FALSE:GLFW_TRUE);
     auto* w=glfwCreateWindow(1280,720,"Wrecklight | Discovery graybox",nullptr,nullptr);
     if(!w){glfwTerminate();return 1;}
-    glfwMakeContextCurrent(w);glfwSwapInterval(1);
+    glfwMakeContextCurrent(w);glfwSwapInterval(route?0:1);
     std::cout<<"OpenGL "<<glGetString(GL_VERSION)<<" / "<<glGetString(GL_RENDERER)<<'\n';
     Viewer viewer;glfwSetWindowUserPointer(w,&viewer);
-    if(!snapshot){glfwSetInputMode(w,GLFW_CURSOR,GLFW_CURSOR_DISABLED);glfwSetCursorPosCallback(w,look);}
-    double last=glfwGetTime();bool ok=true;
+    if(!snapshot && !route){glfwSetInputMode(w,GLFW_CURSOR,GLFW_CURSOR_DISABLED);glfwSetCursorPosCallback(w,look);}
+    double last=glfwGetTime();bool ok=true;int frame=0;
     while(!glfwWindowShouldClose(w)){
         glfwPollEvents();double now=glfwGetTime();
-        if(!snapshot) move(w,viewer.camera,std::min(now-last,.05));
+        if(route) viewer.camera=routePose(frame);
+        else if(!snapshot) move(w,viewer.camera,std::min(now-last,.05));
         last=now;
         int width,height;glfwGetFramebufferSize(w,&width,&height);
         if(width<1 || height<1){glfwWaitEventsTimeout(.05);continue;}
         render(viewer.camera,width,height);
         if(snapshot){ok=capture(argv[2],width,height);break;}
+        if(route && frame%600==0){
+            int view=frame/600;
+            std::string path=(std::filesystem::path(argv[2])/(std::string(names[view])+".ppm")).string();
+            ok=capture(path.c_str(),width,height);
+            std::cout<<"Route frame "<<frame<<" ("<<frame/10<<" s): "<<names[view]<<std::endl;
+            if(!ok || frame==1200) break;
+        }
         glfwSwapBuffers(w);
+        ++frame;
     }
     glfwDestroyWindow(w);glfwTerminate();return ok?0:1;
 }

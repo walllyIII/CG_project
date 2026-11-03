@@ -32,7 +32,7 @@ Deliver a runnable scene, an approximately two-minute video, fixed-view effect c
 
 Individual responsibilities await team confirmation. All five members participate in integration reviews and write the project report.
 
-## Run the discovery graybox
+## Run the week-one graybox
 
 The first playable checkpoint uses the previous course project's CMake, GLFW and compatibility OpenGL approach. Install CMake 3.16 or later, a C++17 compiler and an OpenGL driver supporting a 2.1 compatibility context. CMake uses an installed GLFW package when available and otherwise fetches GLFW 3.4. To build offline with an existing GLFW source tree, add `-DFETCHCONTENT_SOURCE_DIR_GLFW=<path>` at configuration time.
 
@@ -46,8 +46,22 @@ cmake --build build -j
 
 Swim with WASD, look with the mouse, ascend with Space and descend with Left Ctrl. Press R to restore the discovery view and Esc to exit. To reproduce the starting image directly from the framebuffer, run `./build/wrecklight.exe --capture build/discovery.ppm`.
 
-### Composition review · awaiting teammate feedback
+Press **1**, **2** or **3** to return to the discovery, approach or inspection camera. Free swimming resumes from the selected pose. To reproduce all three images from one continuous OpenGL run:
 
-Show only the [unlabelled starting frame](docs/discovery.png) to a teammate who did not build the scene. Before describing the project, ask them to name what they see, point to where they would swim first and explain which shape guided that choice. Record the first response and the indicated location. If either the wreck or the approach-side breach is unclear, revise the silhouette or route and repeat before starting final assets.
+```powershell
+./build/wrecklight.exe --route build/route
+```
+
+The replay renders 1,201 frames along the exterior route using a fixed simulation clock of 10 steps per second. It writes three PPM files at simulated times 0, 60 and 120 seconds. The PNGs below were converted from those framebuffers at their original 1280 x 720 resolution. Replay runs as fast as the renderer allows.
+
+### Team review
+
+| Fixed view | Frame | Question for reviewers |
+| --- | --- | --- |
+| [Discovery](docs/discovery.png) | 0 | Before reading the project description, what do you recognize and where would you swim first? |
+| [Approach](docs/approach.png) | 600 | Where does the chain lead your eye? Point to the opening you would approach. |
+| [Inspection](docs/inspection.png) | 1200 | What object is visible through the breach? Which parts can you distinguish from outside? |
+
+Record each reviewer's first answer before explaining the intended route. The technical playback has been checked on Intel Arc graphics. Teammate feedback is pending.
 
 The graybox uses flat materials and simple distance fog. See the [four-week execution plan](DEVELOPMENT_PLAN.md) for the later rendering milestones.
