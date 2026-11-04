@@ -2,7 +2,7 @@
 
 A first-person night dive for CG 100433, Track 2. The dive starts in blue-black water. Lower the hand torch to find short runs of chain in rippled sand. Lift it again and the seabed drops out of view. As the diver follows the chain, the dark mass beside it resolves into a wreck.
 
-[Watch the current two-minute dive](docs/weathered-wreck/dive.mp4) · [Open the four review frames](docs/black-water/review.png)
+[Watch the current two-minute dive](docs/cannon-wear/dive.mp4) · [Open the four review frames](docs/black-water/review.png)
 
 | Replay time | What to look for |
 | --- | --- |
@@ -16,6 +16,8 @@ A first-person night dive for CG 100433, Track 2. The dive starts in blue-black 
 The torch starts on. Move the mouse to sweep it, and press **F** to switch it off. Light comes from the diver's right hand, fades across 5.5 to 11 scene units and casts a moving shadow. Water scattering is visible when the torch points beyond the seabed. The sand ridges and drifts are geometry shared by the visible scene and the torch shadow pass.
 
 Press **7** for the three planks beside the muzzle and **8** for the oblique view. The upper strake splits along its fibers, leaving a narrow tip and a recessed gray-brown end. The middle plank curls away from a nail that remains in the frame. Lateral movement reveals the space between nail, plank and rib. A local sand drift covers part of the lower seam, where sediment and a short cluster of growth collect beneath the rounded lip. Across the wreck, end checks vary between strakes, deck ends and barrel staves have lost material, and washed-out grain breaks up the timber colors. [See the two wood studies and their surroundings](docs/weathered-wreck/review.png).
+
+Press **9** to inspect the carriage. The low pair of trucks sit in a drift against the axle pins. The barrel has dark iron between the hoops, with rough oxide concentrated along hoop seams and the trunnion seats. Only a short section of the muzzle bevel catches a cool highlight. The replay moves from the muzzle to the low wheel around 1:21–1:24. [See the cannon detail frames](docs/cannon-wear/review.png).
 
 ## Inside the broken gunport
 

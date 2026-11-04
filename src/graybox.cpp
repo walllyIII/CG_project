@@ -1,5 +1,6 @@
 #include <GLFW/glfw3.h>
 #include <cmath>
+#include <algorithm>
 #include <initializer_list>
 
 namespace {
@@ -174,6 +175,35 @@ void hull(){
     spar({-6.9,6.7,.32},{-7.6,4.1,1.25},.045,.045);
     spar({-.85,5.95,.3},{1.2,3.1,-1.6},.05,.05);
 }
+// A turned barrel carries most of its age at the joints. Mark the joint
+// distance per vertex in gun-local Z so both sides of each hoop can oxidize.
+void barrelProfile(double z0,double z1,double r0,double r1,double jointDistance0,double jointDistance1){
+    glBegin(GL_QUAD_STRIP);
+    for(int i=0;i<=64;++i){
+        double a=i*2*pi/64, x=std::cos(a),y=std::sin(a);
+        Point n=unit({x,y,(r0-r1)/(z1-z0)});
+        glNormal3d(n.x,n.y,n.z);
+        glTexCoord4d(.48,.90,1.,jointDistance0);glVertex3d(x*r0,y*r0,z0);
+        glTexCoord4d(.48,.90,1.,jointDistance1);glVertex3d(x*r1,y*r1,z1);
+    }
+    glEnd();
+}
+void carriageSand(){
+    // In gun coordinates the two trucks behind the trunnions sit downhill.
+    // A continuous toe of sand climbs their rims but leaves the front axle legible.
+    glTexCoord2f(.94f,0);glColor3f(.34f,.295f,.22f);
+    auto bed=[](int ring,int step){
+        double a=step*2*pi/32,t=ring/10.;
+        double scallop=1.+.075*std::sin(3*a)+.035*std::cos(5*a);
+        double x=.04+.99*t*scallop*std::cos(a),z=-.52+.91*t*scallop*std::sin(a);
+        double h=.34*(1.-t*t*t)*(1.-t*t)+.015*(1.-t)*std::sin(12*x+3*z);
+        return Point{x,-.799+h,z};
+    };
+    for(int i=0;i<32;++i){
+        face({bed(0,i),bed(1,i),bed(1,i+1)});
+        for(int r=1;r<10;++r)scarFace(bed(r,i),bed(r+1,i),bed(r+1,i+1),bed(r,i+1));
+    }
+}
 void cannon(){
     // All dimensions are ship-local. The muzzle ends inside the broken side.
     glPushMatrix();
@@ -181,33 +211,59 @@ void cannon(){
     glRotated(-18,0,1,0);
     glTexCoord2f(.60f,0);glColor3f(.20f,.09f,.04f);
     for(double x:{-.31,.31}){
-        spar({x,-.38,-.76},{x,-.38,.50},.17,.17);
+        // Two stepped oak cheeks carry the trunnions; the wood darkens at
+        // the bedding surface and around the iron axle pins.
+        Point cheek[]={{x,-.46,-.92},{x,-.46,.57},{x,-.29,.52},
+                       {x,-.24,.20},{x,-.09,.08},{x,-.09,-.45},{x,-.25,-.62},{x,-.29,-.90}};
+        Point thickness{x>0?.125:-.125,0,0};
+        glTexCoord2f(.64f,0);glColor3f(.15f,.097f,.062f);
+        for(int j=1;j<7;++j){
+            face({cheek[0]+thickness,cheek[j]+thickness,cheek[j+1]+thickness});
+            face({cheek[0],cheek[j+1],cheek[j]});
+        }
+        for(int j=0;j<8;++j)scarFace(cheek[j],cheek[(j+1)%8],cheek[(j+1)%8]+thickness,cheek[j]+thickness);
         for(double z:{-.59,.38}){
             double side=x>0?1:-1;
-            spar({x,-.57,z},{x+side*.20,-.57,z},.22,.22);
+            glTexCoord2f(.64f,0);glColor3f(.16f,.111f,.069f);
+            spar({x,-.57,z},{x+side*.20,-.57,z},.22,.213,true,24);
+            glTexCoord2f(.77f,.63f);glColor3f(.129f,.094f,.058f);
+            spar({x+side*.198,-.57,z},{x+side*.217,-.57,z},.075,.063,true,12);
         }
     }
-    glTexCoord2f(.34f,.95f);glColor3f(.33f,.36f,.37f);
-    spar({0,0,-1.22},{0,0,1.18},.40,.29,false,32);
-    spar({0,0,-1.66},{0,0,-1.26},.12,.34,true,24);
-    spar({0,0,-1.74},{0,0,-1.61},.13,.13,true,24);
-    spar({-.57,-.05,-.28},{.57,-.05,-.28},.115,.115,true,24);
-    for(double z:{-.95,-.78,.45,.54}){
-        double r=z<0?.415:.345;
-        spar({0,0,z},{0,0,z+.052},r,r,true,32);
+    carriageSand();
+    glColor3f(.14f,.16f,.166f);
+    // The two faces of a band share the seam mask with adjacent barrel spans.
+    struct Section {double z,r,seam;};
+    const Section profile[]={{-1.70,.09,1},{-1.60,.14,1},{-1.27,.38,.02},
+        {-1.24,.43,0},{-1.10,.43,0},{-1.08,.39,0},{-.96,.39,0},
+        {-.945,.408,0},{-.90,.408,0},{-.885,.385,0},{-.63,.374,0},
+        {-.614,.40,0},{-.54,.40,0},{-.527,.365,0},{.45,.32,0},
+        {.464,.341,0},{.522,.341,0},{.536,.318,0},{1.06,.288,0},
+        {1.084,.328,0},{1.285,.338,.20},{1.315,.34,.23}};
+    for(unsigned j=1;j<sizeof(profile)/sizeof(profile[0]);++j){
+        const auto a=profile[j-1],b=profile[j];
+        double middle=(a.z+b.z)*.5,r=(a.r+b.r)*.5;
+        double gap=(b.z-a.z)*.5;
+        barrelProfile(a.z,middle,a.r,r,a.seam,std::min(gap,.25));
+        barrelProfile(middle,b.z,r,b.r,std::min(gap,.25),b.seam);
     }
-    spar({0,0,-1.27},{0,0,-1.08},.43,.43);
-    spar({0,0,-.62},{0,0,-.53},.42,.42);
-    spar({0,0,1.07},{0,0,1.33},.35,.35,false,32);
+    glTexCoord4f(.62f,.88f,1.f,.17f);
+    spar({0,0,-1.69},{0,0,-1.71},.09,.083,true,24);
+    spar({-.54,-.08,-.28},{.54,-.08,-.28},.101,.101,true,24);
     // Model the annular lip and recessed bore so the opening reads at close range.
-    for(int i=0;i<32;++i){
+    for(int i=0;i<64;++i){
         auto rim=[](int j,double radius,double z){
-            return Point{radius*std::cos(j*pi/16),radius*std::sin(j*pi/16),z};
+            return Point{radius*std::cos(j*pi/32),radius*std::sin(j*pi/32),z};
         };
-        glTexCoord2f(.27f,.79f);glColor3f(.31f,.40f,.46f);
-        face({rim(i,.35,1.33),rim(i+1,.35,1.33),rim(i+1,.21,1.33),rim(i,.21,1.33)});
-        glTexCoord2f(.59f,.85f);glColor3f(.09f,.10f,.11f);
-        face({rim(i,.21,1.33),rim(i+1,.21,1.33),rim(i+1,.21,.88),rim(i,.21,.88)});
+        glTexCoord2f(.84f,.77f);glColor3f(.021f,.023f,.024f);
+        face({rim(i,.333,1.327),rim(i+1,.333,1.327),rim(i+1,.21,1.327),rim(i,.21,1.327)});
+        // Only a short arc at the outer bevel has been rubbed clean.
+        double wear=(i>=2 && i<=6)?std::sin((i-1)*pi/6):0.;
+        glTexCoord2d(.62-.37*wear,.72+.07*wear);
+        glColor3d(.024+.42*wear,.027+.54*wear,.029+.63*wear);
+        face({rim(i,.34,1.315),rim(i+1,.34,1.315),rim(i+1,.333,1.327),rim(i,.333,1.327)});
+        glTexCoord2f(.88f,.74f);glColor3f(.009f,.011f,.012f);
+        face({rim(i,.21,1.327),rim(i+1,.21,1.327),rim(i+1,.21,.88),rim(i,.21,.88)});
         face({{0,0,.88},rim(i,.21,.88),rim(i+1,.21,.88)});
     }
     glPopMatrix();
@@ -307,12 +363,6 @@ void gunRoom(double time){
     glTexCoord2f(.52f,.89f);glColor3f(.20f,.21f,.20f);
     for(Point p: {Point{2.15,1.89,-1.59},Point{2.46,1.89,-1.64},Point{2.78,1.89,-1.39},Point{2.99,1.89,-1.64}})
         ellipsoid(p,{.15,.15,.15});
-    // A low wedge of sediment overlaps the feet of the carriage.
-    glTexCoord2f(.94f,0);glColor3f(.43f,.34f,.20f);
-    for(int i=0;i<18;++i){
-        auto edge=[](int j){double t=j*pi/9;return Point{1.12+.81*std::cos(t),1.746,.07+.73*std::sin(t)};};
-        face({edge(i),edge(i+1),{1.23,1.91,-.22}});
-    }
     // A sheared lid exposes only the near corner of the crushed box.
     glPushMatrix();glTranslated(-.59,1.75,-.39);
     glTexCoord2f(.59f,0);glColor3f(.30f,.16f,.07f);

@@ -23,21 +23,21 @@ const char* vert=R"(
 #version 120
 varying vec3 eye,world,n,objectPoint;
 varying vec4 lightClip,material;
-varying vec2 surface;
+varying vec4 surface;
 void main(){
     vec4 e=gl_ModelViewMatrix*gl_Vertex;
     eye=e.xyz;objectPoint=gl_Vertex.xyz;
     world=(gl_TextureMatrix[0]*e).xyz;
     lightClip=gl_TextureMatrix[1]*vec4(world,1.0);
     n=mat3(gl_TextureMatrix[0])*gl_NormalMatrix*gl_Normal;
-    material=gl_Color; surface=gl_MultiTexCoord0.xy;
+    material=gl_Color; surface=gl_MultiTexCoord0;
     gl_Position=gl_ProjectionMatrix*e;
 })";
 const char* frag=R"(
 #version 120
 varying vec3 eye,world,n,objectPoint;
 varying vec4 lightClip,material;
-varying vec2 surface;
+varying vec4 surface;
 uniform sampler2D depthMap,patternMap,torchMap;
 uniform bool water,caustics,shadows,lamp;
 uniform float clockTime;
@@ -104,7 +104,15 @@ void main(){
     // have different spatial frequencies. A patchy oxide layer covers the iron.
     float pits=valueNoise(world*8.5), fine=valueNoise(world*35.);
     float relief;
-    if(metal>.8){
+    if(surface.z>.5){
+        float joint=1.-smoothstep(.009,.070+.036*pits,surface.w);
+        vec2 seat=(objectPoint.yz-vec2(-.10,-.28))/vec2(.19,.25);
+        float contact=(1.-smoothstep(.45,1.45,length(seat)))*smoothstep(.22,.36,abs(objectPoint.x));
+        float rust=max(joint,contact)*smoothstep(.25,.74,.65*pits+.35*fine);
+        base=mix(base*(.78+.27*pits),vec3(.185,.065,.024)*(.64+.42*fine),rust);
+        rough=mix(rough,.91,rust);metal*=1.-rust;
+        relief=.0015*fine+.007*rust*pits;
+    }else if(metal>.8){
         float oxide=smoothstep(.41,.64,.64*pits+.36*valueNoise(world*2.6));
         base=mix(base,vec3(.22,.071,.028)*(.48+fine),oxide);
         rough=mix(rough,.88,oxide); metal*=1.-oxide;
