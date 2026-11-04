@@ -1,5 +1,9 @@
 #include <GLFW/glfw3.h>
 #include "effects.h"
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#endif
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -17,9 +21,9 @@ constexpr const char* names[]={"discovery","approach","inspection"};
 
 // Replay 120 seconds of camera travel on a fixed simulation clock. The same
 // poses drive the interactive bookmarks and the captured review frames.
-Camera routePose(int frame){
+Camera routePose(double frame){
     constexpr int legFrames=600;
-    int leg=std::min(frame/legFrames,1);
+    int leg=std::min(static_cast<int>(frame/legFrames),1);
     double t=double(frame-leg*legFrames)/legFrames;
     t=t*t*(3-2*t);
     const Camera &a=views[leg], &b=views[leg+1];
@@ -81,23 +85,27 @@ bool capture(const char* path,int w,int h){
 }
 }
 int main(int argc,char** argv){
+    bool film=argc==2 && std::string(argv[1])=="--film";
+#ifdef _WIN32
+    if(film) _setmode(_fileno(stdout),_O_BINARY);
+#endif
     bool snapshot=argc==3 && std::string(argv[1])=="--capture";
     bool route=argc==3 && std::string(argv[1])=="--route";
     bool review=argc==3 && std::string(argv[1])=="--review";
     if(route || review) std::filesystem::create_directories(argv[2]);
-    if(argc!=1 && !snapshot && !route && !review){std::cerr<<"Usage: wrecklight [--capture image.ppm | --route output_directory | --review output_directory]\n";return 2;}
+    if(argc!=1 && !film && !snapshot && !route && !review){std::cerr<<"Usage: wrecklight [--capture image.ppm | --route output_directory | --review output_directory | --film]\n";return 2;}
     glfwSetErrorCallback([](int,const char* msg){std::cerr<<msg<<'\n';});
     if(!glfwInit()) return 1;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,2);glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,1);
-    glfwWindowHint(GLFW_VISIBLE,(snapshot || route || review)?GLFW_FALSE:GLFW_TRUE);
-    auto* w=glfwCreateWindow(1280,720,"Wrecklight | Discovery graybox",nullptr,nullptr);
+    glfwWindowHint(GLFW_VISIBLE,(snapshot || route || review || film)?GLFW_FALSE:GLFW_TRUE);
+    auto* w=glfwCreateWindow(1280,720,"Wrecklight | Wrecklight dive",nullptr,nullptr);
     if(!w){glfwTerminate();return 1;}
-    glfwMakeContextCurrent(w);glfwSwapInterval(route?0:1);
-    std::cout<<"OpenGL "<<glGetString(GL_VERSION)<<" / "<<glGetString(GL_RENDERER)<<'\n';
+    glfwMakeContextCurrent(w);glfwSwapInterval(route || film?0:1);
+    std::cerr<<"OpenGL "<<glGetString(GL_VERSION)<<" / "<<glGetString(GL_RENDERER)<<'\n';
     if(!initEffects()){std::cerr<<"Underwater renderer initialization failed\n";glfwTerminate();return 1;}
     Viewer viewer;glfwSetWindowUserPointer(w,&viewer);
     glfwSetKeyCallback(w,toggle);
-    if(!snapshot && !route && !review){glfwSetInputMode(w,GLFW_CURSOR,GLFW_CURSOR_DISABLED);glfwSetCursorPosCallback(w,look);}
+    if(!film && !snapshot && !route && !review){glfwSetInputMode(w,GLFW_CURSOR,GLFW_CURSOR_DISABLED);glfwSetCursorPosCallback(w,look);}
     double last=glfwGetTime();bool ok=true;int frame=0;
     struct Comparison {const char* name; int view; Effects effects; double time;};
     const Comparison checks[]={
@@ -110,8 +118,11 @@ int main(int argc,char** argv){
         {"plank-middle",2,{true,false,true,false},4},
         {"plank-far",2,{true,false,true,false},4}
     };
+    constexpr int filmFrames=24*120;
+    std::vector<char> filmPixels;
     while(!glfwWindowShouldClose(w)){
         glfwPollEvents();double now=glfwGetTime();
+        const double tick=film?1200.*frame/(filmFrames-1):frame;
         if(review){
             viewer.camera=views[checks[frame].view];
             viewer.effects=checks[frame].effects;
@@ -122,14 +133,14 @@ int main(int argc,char** argv){
                 // Look straight at a fixed point on the starboard plank, across all distances.
                 viewer.camera={3.8,2.45,-6.25+distance,0,0};
             }
-        }else if(route){
-            viewer.camera=routePose(frame);viewer.effects.lamp=frame>=1050;
+        }else if(route || film){
+            viewer.camera=routePose(tick);viewer.effects.lamp=tick>=1050;
         }
         else if(!snapshot) move(w,viewer.camera,std::min(now-last,.05));
         last=now;
         int width,height;glfwGetFramebufferSize(w,&width,&height);
         if(width<1 || height<1){glfwWaitEventsTimeout(.05);continue;}
-        double time=review?checks[frame].time:(route?frame*.1:(snapshot?0.:now));
+        double time=review?checks[frame].time:((route || film)?tick*.1:(snapshot?0.:now));
         render(viewer.camera,width,height,viewer.effects,time);
         if(review){
             auto path=std::filesystem::path(argv[2])/(std::string(checks[frame].name)+".ppm");
@@ -137,6 +148,16 @@ int main(int argc,char** argv){
             if(!ok || frame==int(sizeof(checks)/sizeof(checks[0]))-1) break;
         }
         if(snapshot){ok=capture(argv[2],width,height);break;}
+        if(film){
+            filmPixels.resize(static_cast<size_t>(width)*height*3);
+            glPixelStorei(GL_PACK_ALIGNMENT,1);glReadBuffer(GL_BACK);
+            glReadPixels(0,0,width,height,GL_RGB,GL_UNSIGNED_BYTE,filmPixels.data());
+            // Concatenated PPMs keep frames self-describing on high-DPI displays.
+            std::cout<<"P6\n"<<width<<" "<<height<<"\n255\n";
+            for(int y=height-1;y>=0;--y) std::cout.write(filmPixels.data()+y*width*3,width*3);
+            ok=std::cout.good() && glGetError()==GL_NO_ERROR;
+            if(!ok || frame+1==filmFrames) break;
+        }
         if(route && frame%600==0){
             int view=frame/600;
             std::string path=(std::filesystem::path(argv[2])/(std::string(names[view])+".ppm")).string();

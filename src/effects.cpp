@@ -76,16 +76,20 @@ void main(){
         rough=mix(rough,.87,oxide); metal*=1.-oxide;
         relief=.05*oxide*sin(world.y*31.);
     }else if(rough<.7){
-        float grain=sin(world.y*45.+1.4*sin(world.x*2.));
+        float grain=sin(world.y*48.+2.1*sin(world.x*1.7+world.z*.8)+.7*sin(world.x*4.));
         base*=.92+.08*grain; relief=.045*grain;
     }else relief=.05*sin(world.x*19.)*cos(world.z*24.);
     N=normalize(N+relief*(vec3(.4,.3,.8)-N*dot(N,vec3(.4,.3,.8))));
     float lit=visibility(lightClip.xyz/lightClip.w*.5+.5);
     vec2 uv=(world.xz-world.y*sun.xz/sun.y)*.085;
+    uv+=.024*vec2(sin(uv.y*14.+clockTime*.19),cos(uv.x*12.-clockTime*.15));
     float lines=.55*texture2D(patternMap,uv+clockTime*vec2(.011,.006)).r
                +.45*texture2D(patternMap,uv*1.37-clockTime*vec2(.007,.012)).r;
     float caustic=caustics?lines*smoothstep(.05,.72,dot(N,sun))*exp(-.055*max(0.,8.-world.y)):0.;
     vec3 color=.22*base+lit*vec3(.70,.94,1.)*(2.+4.*caustic)*brdf(N,V,sun,base,rough,metal);
+    // Approximate broad sky and dark seabed reflections on the exposed iron.
+    vec3 reflected=reflect(-V,N);
+    color+=metal*base*(.045+.24*smoothstep(-.35,.85,reflected.y));
     if(lamp){
         float cone=smoothstep(.82,.965,-eye.z/max(.001,dist));
         color+=vec3(1.,.88,.73)*13.*cone/(1.+.18*dist*dist)*brdf(N,V,V,base,rough,metal);

@@ -78,4 +78,18 @@ Run `./build/wrecklight.exe --review build/review` to capture twelve 1280 x 720 
 | Caustics | Compare [4 seconds](docs/week2/mid-lit.png) with [8 seconds](docs/week2/mid-later.png). The sand pattern moves and the hull shadow stays in place. [Disabling shadows](docs/week2/mid-no-shadows.png) lets bright lines appear beneath the ship. |
 | Dive lamp | Compare [lamp off](docs/week2/near-dark.png) and [lamp on](docs/week2/near-lamp.png) at the same pose, then inspect the [oblique view](docs/week2/near-oblique.png). Look for changes in the exposed muzzle, rust patches and surrounding wood. |
 
-The captures and full route were rendered on Intel Arc graphics. The model remains a blockout pending team review. The 1080p presentation-machine performance target still requires a timed run. See the [four-week execution plan](DEVELOPMENT_PLAN.md) for the later rendering milestones.
+The captures and full route were rendered on Intel Arc graphics. The week-two captures use the original blockout. The 1080p presentation-machine performance target still requires a timed run. See the [four-week execution plan](DEVELOPMENT_PLAN.md) for the later rendering milestones.
+
+## Week-three scene and first recording
+
+[Watch the two-minute dive](docs/week3/first-dive.mp4) or inspect the [discovery](docs/week3/discovery.png), [approach](docs/week3/approach.png) and [inspection](docs/week3/inspection.png) frames. The original camera bookmarks are used throughout. The lamp comes on at 1:45 as the diver reaches the breach.
+
+Individual timber strakes, splintered ends and exposed framing now define the approach side. The cannon has a recessed muzzle, reinforcement rings, trunnions and a planked platform. Stone patches and short static seagrass flank the anchor chain. The geometry and procedural materials are authored in the project source.
+
+The first recording uses 2,880 rendered frames encoded at 24 fps. To reproduce it with FFmpeg on PATH, run the following from the repository root in Windows Command Prompt (binary pipe):
+
+```bat
+build\wrecklight.exe --film | ffmpeg -f image2pipe -framerate 24 -vcodec ppm -i pipe:0 -c:v libx264 -crf 24 -pix_fmt yuv420p -movflags +faststart first-dive.mp4
+```
+
+The recording follows the scripted exterior path. Free-swim collision checks and the timed 1080p presentation-machine run are still pending.
