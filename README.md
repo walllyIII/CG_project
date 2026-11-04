@@ -2,7 +2,21 @@
 
 A first-person night dive for CG 100433, Track 2. The dive starts in blue-black water. Lower the hand torch to find short runs of chain in rippled sand. Lift it again and the seabed drops out of view. As the diver follows the chain, the dark mass beside it resolves into a wreck.
 
-[Watch the current two-minute dive](docs/diver-motion/dive.mp4) · [Open the four review frames](docs/black-water/review.png)
+![Jellyfish and small fish caught in the dive torch above the anchor chain](docs/night-dive-wildlife.png)
+
+[Build and run](#run-the-underwater-scene) | [Watch the earlier two-minute dive](docs/diver-motion/dive.mp4)
+
+## Try the interactive dive
+
+Press **2** for the approach view and hold still. Three jellyfish pulse at different rates and drift on separate paths. The tentacle tips trail each stroke. Sweep the torch across a bell to catch the thin rim, then press **F** to see it fade.
+
+Seven small fish vary their cruising speed. Swim toward one with the lamp off, or sweep the center of the beam across the shoal. Nearby and directly lit fish scatter first. Move away and turn the beam aside to watch them ease back into the group.
+
+Follow the chain to the scattered cargo. Swimming into a barrel, crate or hull plank stops the diver at its surface. Press **4** to inspect the gun room. Near the timbers, the diver draws the torch inward as you turn. [View the cargo layout](docs/cargo-clearance.png).
+
+## Recorded dive route
+
+These timestamps refer to the recording made before the wildlife and collision updates. [View four route frames](docs/black-water/review.png).
 
 | Replay time | What to look for |
 | --- | --- |
@@ -41,7 +55,7 @@ Build on the course OpenGL and GLSL camera, mesh-loading and shader framework. E
 
 ## Scope and delivery
 
-Build one wreck, a small seabed and one exterior route. Prioritize the side facing the diver and the interior visible through the breach. Fish schools, animated seaweed and a traversable cabin are outside the four-week scope.
+The playable route covers one wreck and the surrounding seabed, including animated seagrass, a small shoal and jellyfish. The diver inspects the gun room through the breach.
 
 Deliver a runnable scene, an approximately two-minute video, fixed-view effect comparisons, performance measurements and a report crediting models and textures. The target is **1080p at an average of at least 30 FPS on the presentation computer**.
 
@@ -111,4 +125,4 @@ The first recording uses 2,880 rendered frames encoded at 24 fps. To reproduce i
 build\wrecklight.exe --film | ffmpeg -f image2pipe -framerate 24 -vcodec ppm -i pipe:0 -c:v libx264 -crf 24 -pix_fmt yuv420p -movflags +faststart first-dive.mp4
 ```
 
-The recording follows the scripted exterior path. Free-swim collision checks and the timed 1080p presentation-machine run are still pending.
+The recording follows the scripted exterior path. The timed 1080p run on the presentation computer is still pending.
