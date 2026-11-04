@@ -13,7 +13,7 @@
 void drawGraybox();
 namespace {
 GLuint program=0, pattern=0;
-Target shadow;
+Target shadow,torch;
 PFNGLACTIVETEXTUREPROC activeTexture;
 PFNGLGETUNIFORMLOCATIONPROC location;
 PFNGLUNIFORM1IPROC setInt;
@@ -38,7 +38,7 @@ const char* frag=R"(
 varying vec3 eye,world,n;
 varying vec4 lightClip,material;
 varying vec2 surface;
-uniform sampler2D depthMap,patternMap;
+uniform sampler2D depthMap,patternMap,torchMap;
 uniform bool water,caustics,shadows,lamp;
 uniform float clockTime;
 const vec3 sun=vec3(-0.304,0.743,-0.596);
@@ -60,6 +60,23 @@ vec3 brdf(vec3 N,vec3 V,vec3 L,vec3 color,float rough,float metal){
     vec3 F=F0+(1.-F0)*pow(1.-max(dot(V,H),0.),5.);
     return nl*((1.-F)*(1.-metal)*color/3.14159+D*G*F/max(.001,4.*nl*nv));
 }
+float hash3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
+float valueNoise(vec3 p){
+    vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+    return mix(mix(mix(hash3(i),hash3(i+vec3(1,0,0)),f.x),
+                   mix(hash3(i+vec3(0,1,0)),hash3(i+vec3(1,1,0)),f.x),f.y),
+               mix(mix(hash3(i+vec3(0,0,1)),hash3(i+vec3(1,0,1)),f.x),
+                   mix(hash3(i+vec3(0,1,1)),hash3(i+vec3(1)),f.x),f.y),f.z);
+}
+float torchVisibility(vec3 ray){
+    float z=-ray.z;
+    vec2 uv=.5+.5*ray.xy/(z*.52);
+    float depth=14./13.85*(1.-.15/z);
+    float total=0.;
+    for(int i=-1;i<=1;i++) for(int j=-1;j<=1;j++)
+        total+=step(depth-.00085,texture2D(torchMap,uv+vec2(i,j)/768.).r);
+    return total/9.;
+}
 void main(){
     float dist=length(eye);
     vec3 V=normalize(mat3(gl_TextureMatrix[0])*(-eye));
@@ -69,33 +86,56 @@ void main(){
     vec3 base=material.rgb;
     // World-locked, low-amplitude surface relief. Wood grain and granular sand
     // have different spatial frequencies. A patchy oxide layer covers the iron.
+    float pits=valueNoise(world*8.5), fine=valueNoise(world*35.);
     float relief;
     if(metal>.8){
-        float oxide=smoothstep(.28,.73,sin(world.x*10.+world.z*4.)*sin(world.y*9.+world.z*5.));
-        base=mix(base,vec3(.27,.072,.029),oxide);
-        rough=mix(rough,.87,oxide); metal*=1.-oxide;
-        relief=.05*oxide*sin(world.y*31.);
-    }else if(rough<.7){
-        float grain=sin(world.y*48.+2.1*sin(world.x*1.7+world.z*.8)+.7*sin(world.x*4.));
-        base*=.92+.08*grain; relief=.045*grain;
-    }else relief=.05*sin(world.x*19.)*cos(world.z*24.);
-    N=normalize(N+relief*(vec3(.4,.3,.8)-N*dot(N,vec3(.4,.3,.8))));
+        float oxide=smoothstep(.41,.64,.64*pits+.36*valueNoise(world*2.6));
+        base=mix(base,vec3(.22,.071,.028)*(.48+fine),oxide);
+        rough=mix(rough,.88,oxide); metal*=1.-oxide;
+        relief=.011*oxide*pits+.002*fine;
+    }else if(rough<.7 && metal<.1){
+        float grain=valueNoise(vec3(world.x*.86,world.y*36.+2.*pits,world.z*3.));
+        float grooves=smoothstep(.57,.83,grain);
+        base*=.52+.58*grain+.22*pits-.34*grooves;
+        relief=.013*grain+.003*fine;
+    }else{
+        float ripple=sin(world.x*7.+world.z*3.2+2.4*valueNoise(world*.65));
+        base*=.65+.33*pits+.22*fine;
+        relief=.011*ripple+.008*pits+.0015*fine;
+    }
+    vec3 dx=dFdx(world),dy=dFdy(world);
+    vec3 r1=cross(dy,N),r2=cross(N,dx);
+    float det=dot(dx,r1);
+    N=normalize(max(abs(det),.0000001)*N-sign(det)*(dFdx(relief)*r1+dFdy(relief)*r2));
     float lit=visibility(lightClip.xyz/lightClip.w*.5+.5);
     vec2 uv=(world.xz-world.y*sun.xz/sun.y)*.085;
     uv+=.024*vec2(sin(uv.y*14.+clockTime*.19),cos(uv.x*12.-clockTime*.15));
     float lines=.55*texture2D(patternMap,uv+clockTime*vec2(.011,.006)).r
                +.45*texture2D(patternMap,uv*1.37-clockTime*vec2(.007,.012)).r;
     float caustic=caustics?lines*smoothstep(.05,.72,dot(N,sun))*exp(-.055*max(0.,8.-world.y)):0.;
-    vec3 color=.22*base+lit*vec3(.70,.94,1.)*(2.+4.*caustic)*brdf(N,V,sun,base,rough,metal);
-    // Approximate broad sky and dark seabed reflections on the exposed iron.
-    vec3 reflected=reflect(-V,N);
-    color+=metal*base*(.045+.24*smoothstep(-.35,.85,reflected.y));
-    if(lamp){
-        float cone=smoothstep(.82,.965,-eye.z/max(.001,dist));
-        color+=vec3(1.,.88,.73)*13.*cone/(1.+.18*dist*dist)*brdf(N,V,V,base,rough,metal);
+    vec3 color=.0018*base+lit*vec3(.045,.11,.16)*(.095+.07*caustic)*brdf(N,V,sun,base,rough,metal);
+    vec3 waterColor=vec3(.00055,.0017,.0027);
+    vec3 ray=eye-vec3(.36,-.28,-.22);
+    float range=length(ray);
+    float beam=smoothstep(.900,.974,-ray.z/max(.001,range));
+    if(lamp && beam>0. && range<14. && ray.z<-.15){
+        vec3 L=normalize(mat3(gl_TextureMatrix[0])*(-ray));
+        float power=49.*beam*(1.-smoothstep(8.,14.,range))/(1.+.24*range*range);
+        color+=vec3(.90,.97,1.)*power*torchVisibility(ray)*brdf(N,V,L,base,rough,metal);
     }
-    vec3 waterColor=vec3(.033,.112,.134);
-    if(water) color=mix(waterColor,color,exp(-dist*vec3(.097,.049,.032)));
+    if(water) color=mix(waterColor,color,exp(-dist*vec3(.077,.039,.029)));
+    // Integrate backscatter only inside the cone and in front of the first surface.
+    if(water && lamp){
+        vec3 dir=eye/max(dist,.001);
+        float reach=min(dist,14.), scatter=0.;
+        for(int i=0;i<8;i++){
+            float t=(float(i)+.5)*reach/8.;
+            vec3 q=dir*t-vec3(.36,-.28,-.22);
+            scatter+=smoothstep(.9,.98,-normalize(q).z)*exp(-.34*t)*reach/8.;
+        }
+        color+=scatter*vec3(.0009,.0016,.0021);
+    }
+    color=color/(1.+color);
     gl_FragColor=vec4(pow(clamp(color,0.,1.),vec3(1./2.2)),1.);
 })";
 
@@ -133,7 +173,7 @@ bool initEffects(){
     setFloat=reinterpret_cast<PFNGLUNIFORM1FPROC>(glfwGetProcAddress("glUniform1f"));
     if(!activeTexture || !location || !setInt || !setFloat) return false;
     program=shader::build(vert,frag);
-    if(!program || !shadow.resize(1024,1024)) return false;
+    if(!program || !shadow.resize(1024,1024) || !torch.resize(768,768)) return false;
     // Geometry and sunlight are static, so the shadow map only needs one pass.
     shadow.bind();glEnable(GL_DEPTH_TEST);glClear(GL_DEPTH_BUFFER_BIT);
     glMatrixMode(GL_PROJECTION);lightMatrix();
@@ -141,12 +181,24 @@ bool initEffects(){
     bindScreen(1280,720);makePattern();
     shader::bind(program);
     setInt(location(program,"depthMap"),0);setInt(location(program,"patternMap"),1);
+    setInt(location(program,"torchMap"),2);
     const char* keys[]={"water","caustics","shadows","lamp"};
     for(int i=0;i<4;++i) flags[i]=location(program,keys[i]);
     clockLocation=location(program,"clockTime");
     return glGetError()==GL_NO_ERROR;
 }
 void bindEffects(const Effects& e,double time,double x,double y,double z,double yaw,double pitch){
+    if(e.lamp){
+        GLint viewport[4]; glGetIntegerv(GL_VIEWPORT,viewport);
+        shader::bind(0);torch.bind();glClear(GL_DEPTH_BUFFER_BIT);
+        glMatrixMode(GL_PROJECTION);glPushMatrix();glLoadIdentity();
+        glFrustum(-.078,.078,-.078,.078,.15,14.);
+        glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();
+        glTranslated(-.36,.28,.22);glRotated(-pitch,1,0,0);glRotated(yaw,0,1,0);glTranslated(-x,-y,-z);
+        drawGraybox();glPopMatrix();glMatrixMode(GL_PROJECTION);glPopMatrix();
+        bindScreen(viewport[2],viewport[3]);shader::bind(program);
+    }
+    activeTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,torch.depth);
     activeTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,shadow.depth);
     glMatrixMode(GL_TEXTURE);glLoadIdentity();glTranslated(x,y,z);
     glRotated(-yaw,0,1,0);glRotated(pitch,1,0,0);
@@ -155,6 +207,41 @@ void bindEffects(const Effects& e,double time,double x,double y,double z,double 
     setInt(flags[0],e.water);setInt(flags[1],e.caustics);setInt(flags[2],e.shadows);setInt(flags[3],e.lamp);
     setFloat(clockLocation,static_cast<float>(time));
 }
+void drawHandLight(bool on);
+void finishDiveView(bool on,double time){
+    shader::bind(0);
+    glPushAttrib(GL_ENABLE_BIT|GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_POINT_BIT|GL_LIGHTING_BIT);
+    if(on){
+        // World-space silt drifts through the beam. The scene depth buffer
+        // hides particles behind wreckage and the range test bounds visibility.
+        GLdouble m[16];glGetDoublev(GL_MODELVIEW_MATRIX,m);
+        glEnable(GL_BLEND);glBlendFunc(GL_SRC_ALPHA,GL_ONE);glDepthMask(GL_FALSE);
+        glPointSize(1.8f);glBegin(GL_POINTS);
+        unsigned state=317u;
+        auto random=[&](){state=1664525u*state+1013904223u;return (state>>8)/16777216.;};
+        for(int i=0;i<2100;++i){
+            double x=-8.+16.*random()+.23*std::sin(time*.37+i);
+            double y=.12+6.*random()+.06*std::cos(time*.51+i);
+            double z=-13.+27.*random();
+            double ex=m[0]*x+m[4]*y+m[8]*z+m[12]-.36;
+            double ey=m[1]*x+m[5]*y+m[9]*z+m[13]+.28;
+            double ez=-(m[2]*x+m[6]*y+m[10]*z+m[14]+.22);
+            if(ez<.55 || ez>9.) continue;
+            double radial=(ex*ex+ey*ey)/(ez*ez);
+            if(radial>.18) continue;
+            glColor4d(.58,.75,.76,.48*(1.-radial/.18)*(1.-ez/9.));
+            glVertex3d(x,y,z);
+        }
+        glEnd();glDepthMask(GL_TRUE);glDisable(GL_BLEND);
+    }
+    glEnable(GL_LIGHTING);glEnable(GL_LIGHT0);glEnable(GL_COLOR_MATERIAL);
+    glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();
+    const GLfloat direction[]={-.4f,.7f,-.7f,0};
+    const GLfloat fill[]={on?.78f:.12f,on?.86f:.16f,on?.9f:.2f,1};
+    glLightfv(GL_LIGHT0,GL_POSITION,direction);glLightfv(GL_LIGHT0,GL_DIFFUSE,fill);
+    glPopMatrix();drawHandLight(on);
+    glPopAttrib();shader::bind(program);
+}
 void releaseEffects(){
-    shader::bind(0);shader::release(program);shadow.release();glDeleteTextures(1,&pattern);
+    shader::bind(0);shader::release(program);shadow.release();torch.release();glDeleteTextures(1,&pattern);
 }

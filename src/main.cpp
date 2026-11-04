@@ -15,7 +15,7 @@ void drawGraybox();
 
 namespace {
 constexpr double rad=3.141592653589793/180;
-struct Camera {double x=0,y=3.25,z=12,yaw=0,pitch=-9;};
+struct Camera {double x=0,y=3.25,z=12,yaw=-12,pitch=-19;};
 constexpr Camera views[]={{}, {-1.35,2.45,2.5,12,-9}, {2.15,3.45,-5.65,-22,-20}};
 constexpr const char* names[]={"discovery","approach","inspection"};
 
@@ -61,7 +61,7 @@ void toggle(GLFWwindow* w,int key,int,int action,int){
     if(key==GLFW_KEY_H) e.shadows=!e.shadows;
 }
 void render(const Camera &c,int w,int h,const Effects& effects,double time){
-    const GLfloat water[]={.212f,.370f,.402f,1};
+    const GLfloat water[]={.033f,.055f,.068f,1};
     glClearColor(water[0],water[1],water[2],1);
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
     glViewport(0,0,w,h);
@@ -72,6 +72,7 @@ void render(const Camera &c,int w,int h,const Effects& effects,double time){
     glRotated(-c.pitch,1,0,0);glRotated(c.yaw,0,1,0);glTranslated(-c.x,-c.y,-c.z);
     bindEffects(effects,time,c.x,c.y,c.z,c.yaw,c.pitch);
     drawGraybox();
+    finishDiveView(effects.lamp,time);
 }
 // PPM keeps the framebuffer capture independent of image-library dependencies.
 bool capture(const char* path,int w,int h){
@@ -109,14 +110,14 @@ int main(int argc,char** argv){
     double last=glfwGetTime();bool ok=true;int frame=0;
     struct Comparison {const char* name; int view; Effects effects; double time;};
     const Comparison checks[]={
-        {"far-water",0,{},4},{"far-clear",0,{false,true,true,false},4},
-        {"mid-lit",1,{},4},{"mid-no-caustics",1,{true,false,true,false},4},
-        {"mid-later",1,{},8},{"mid-no-shadows",1,{true,true,false,false},4},
-        {"near-dark",2,{},4},{"near-lamp",2,{true,true,true,true},4},
+        {"far-water",0,{},4},{"far-clear",0,{false,true,true,true},4},
+        {"mid-lit",1,{},4},{"mid-no-caustics",1,{true,false,true,true},4},
+        {"mid-later",1,{},8},{"mid-no-shadows",1,{true,true,false,true},4},
+        {"near-dark",2,{true,true,true,false},4},{"near-lamp",2,{true,true,true,true},4},
         {"near-oblique",2,{true,true,true,true},4},
-        {"plank-near",2,{true,false,true,false},4},
-        {"plank-middle",2,{true,false,true,false},4},
-        {"plank-far",2,{true,false,true,false},4}
+        {"plank-near",2,{true,false,true,true},4},
+        {"plank-middle",2,{true,false,true,true},4},
+        {"plank-far",2,{true,false,true,true},4}
     };
     constexpr int filmFrames=24*120;
     std::vector<char> filmPixels;
@@ -134,7 +135,7 @@ int main(int argc,char** argv){
                 viewer.camera={3.8,2.45,-6.25+distance,0,0};
             }
         }else if(route || film){
-            viewer.camera=routePose(tick);viewer.effects.lamp=tick>=1050;
+            viewer.camera=routePose(tick);viewer.effects.lamp=true;
         }
         else if(!snapshot) move(w,viewer.camera,std::min(now-last,.05));
         last=now;

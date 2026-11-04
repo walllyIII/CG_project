@@ -153,6 +153,119 @@ void anchor(){
     glPopMatrix();
 }
 double bed(double x,double z){return -.13+.13*std::sin(.32*x+.27*z)+.06*std::cos(.53*x-.39*z);}
+// Rectangular timbers keep a closed end grain and cast solid torch shadows.
+void timber(Point c,double w,double h,double d){
+    Point a{c.x-w/2,c.y-h/2,c.z-d/2}, b{a.x+w,a.y,a.z};
+    Point e{0,h,0}, f{0,0,d};
+    face({a,b,b+e,a+e});face({a+f,a+e+f,b+e+f,b+f});
+    face({a+e,b+e,b+e+f,a+e+f});face({a,a+f,b+f,b});
+    face({a,a+e,a+e+f,a+f});face({b,b+f,b+e+f,b+e});
+}
+void ellipsoid(Point c,Point radii){
+    auto vertex=[&](int i,int j){
+        double u=i*pi/10,v=-pi/2+j*pi/10;
+        return Point{c.x+radii.x*std::cos(u)*std::cos(v),c.y+radii.y*std::sin(v),c.z+radii.z*std::sin(u)*std::cos(v)};
+    };
+    for(int j=0;j<10;++j) for(int i=0;i<20;++i){
+        if(j>0) face({vertex(i,j),vertex(i+1,j),vertex(i+1,j+1)});
+        if(j<9) face({vertex(i,j),vertex(i+1,j+1),vertex(i,j+1)});
+    }
+}
+void pirateCrest(){
+    // A carved escutcheon bolted beside the breach: crossed bones, a domed
+    // cranium, inset dark sockets and individual teeth stand proud of the wood.
+    glPushMatrix();glTranslated(-.93,2.8,2.23);glRotated(23,1,0,0);
+    glTexCoord2f(.59f,0);glColor3f(.085f,.038f,.019f);
+    ellipsoid({0,0,0},{.74,.69,.115});
+    glTexCoord2f(.49f,.35f);glColor3f(.41f,.27f,.095f);
+    for(int k=0;k<24;++k){
+        auto rim=[](int i){return Point{.70*std::cos(i*pi/12),.65*std::sin(i*pi/12),.072};};
+        spar(rim(k),rim(k+1),.025,.025);
+    }
+    glTexCoord2f(.76f,0);glColor3f(.69f,.57f,.37f);
+    for(int sign:{-1,1}){
+        Point a{-.45,-.30*sign,.13},b{.45,.30*sign,.13};
+        spar(a,b,.057,.057);
+        for(Point tip:{a,b}){ellipsoid(tip+Point{0,.045,0},{.07,.063,.05});ellipsoid(tip-Point{0,.045,0},{.07,.063,.05});}
+    }
+    ellipsoid({0,.13,.19},{.30,.285,.14});
+    for(int i=-2;i<=2;++i) timber({i*.068,-.13,.245},.053,.099,.083);
+    glColor3f(.024f,.018f,.012f);
+    for(int sign:{-1,1}) ellipsoid({sign*.126,.13,.312},{.085,.082,.026});
+    face({{0,.09,.337},{-.047,-.012,.308},{.047,-.012,.308}});
+    glPopMatrix();
+}
+void wreckFittings(){
+    pirateCrest();
+    glTexCoord2f(.54f,0);glColor3f(.19f,.088f,.042f);
+    // Broken stern gallery with framed window bays and a projecting cornice.
+    for(int j=0;j<5;++j) timber({-7.7+j*.52,4.72,1.43},.12,1.26,.20);
+    timber({-6.66,4.21,1.43},2.27,.16,.24);
+    timber({-6.66,5.31,1.43},2.45,.19,.34);
+    for(int k=0;k<3;++k){
+        spar({-6.8+k*.28,4.25,1.25},{-4.4+k*.08,7.8,0},.025,.025);
+    }
+    // Torn pennant folds through depth; the loose edge splits into streamers.
+    glTexCoord2f(.85f,0);glColor3f(.16f,.04f,.035f);
+    for(int i=0;i<11;++i){
+        double x=-4.36+i*.19,y=8.14-i*.055,z=.22*std::sin(i*.8);
+        double zn=.22*std::sin((i+1)*.8),drop=.70-.045*i;
+        face({{x,y,z},{x+.19,y-.055,zn},{x+.19,y-.055-drop,zn},{x,y-drop,z}});
+        if(i>=8) face({{x,y-drop,z},{x+.41,y-drop-.26,zn+.08},{x+.15,y-drop+.02,zn}});
+    }
+}
+void barrel(double x,double z,double yaw,double scale){
+    glPushMatrix();glTranslated(x,bed(x,z)+.46*scale,z);glRotated(yaw,0,1,0);
+    glRotated(73,1,0,0);glScaled(scale,scale,scale);
+    for(int j=0;j<14;++j){
+        double tone=.70+.27*std::cos(j*5.2);
+        glTexCoord2f(.53f,0);glColor3d(.33*tone,.17*tone,.071*tone);
+        auto stave=[&](int end,double y,double r){
+            double a=(j+.025+end*.95)*2*pi/14;
+            return Point{r*std::cos(a),y,r*std::sin(a)};
+        };
+        for(int half:{-1,1})face({stave(0,0,.49),stave(1,0,.49),stave(1,half*.59,.39),stave(0,half*.59,.39)});
+    }
+    spar({0,-.57,0},{0,.57,0},.38,.38,true,14);
+    glTexCoord2f(.52f,.87f);glColor3f(.24f,.22f,.17f);
+    for(double y:{-.45,-.16,.19,.44}){
+        double r=.505-.17*std::abs(y);
+        spar({0,y-.033,0},{0,y+.033,0},r,r,false,14);
+    }
+    glPopMatrix();
+}
+void spill(){
+    barrel(-1.8,-1.1,48,1.18);barrel(-2.8,-2.,-32,.91);barrel(2.3,-4.7,64,1.);
+    barrel(1.7,3.8,22,.81);
+    // Cargo crates of different sizes, with individual slats and inset seams.
+    for(int i=0;i<4;++i){
+        const double xs[]={.62,-2.8,2.9,-3.4},zs[]={2.8,-3.5,-3.,-4.8};
+        double x=xs[i],z=zs[i];
+        glPushMatrix();glTranslated(x,bed(x,z)+.31,z);glRotated(22+i*29,0,1,0);glRotated(i*4,0,0,1);
+        glTexCoord2f(.59f,0);
+        for(int j=0;j<5;++j){
+            glColor3d(.29+j*.012,.137+j*.009,.058+j*.006);
+            timber({(j-2)*.22,0,0},.214,.75,.79);
+        }
+        glColor3f(.14f,.073f,.031f);
+        for(double end:{-.41,.41}){
+            timber({end,0,0},.11,.82,.84);
+        }
+        glPushMatrix();glRotated(29,0,0,1);timber({0,0,.409},1.10,.095,.08);glPopMatrix();
+        glPopMatrix();
+    }
+    for(int j=0;j<32;++j){
+        double x=3.7*std::sin(j*7.31),z=4.4-10.*(.5+.5*std::cos(j*2.32));
+        glPushMatrix();glTranslated(x,bed(x,z)+.025,z);glRotated(j*97.,0,1,0);glRotated(4.*std::sin(j),0,0,1);
+        glTexCoord2f(.57f,0);glColor3d(.19+.025*(j%4),.092,.044);
+        timber({0,0,0},.46+.29*(j%6),.09,.12+.025*(j%5));glPopMatrix();
+    }
+    glTexCoord2f(.43f,.91f);glColor3f(.21f,.19f,.17f);
+    for(int j=0;j<9;++j){
+        double x=1.3+.85*std::sin(j*4.4),z=-3.9+.8*std::cos(j*2.5);
+        ellipsoid({x,bed(x,z)+.13,z},{.17,.17,.17});
+    }
+}
 void seabedDetails(){
     // Low, asymmetric stones collect in patches beside the swimming corridor.
     for(int group=0;group<10;++group){
@@ -190,8 +303,8 @@ void drawGraybox(){
         face({a,b,c});face({a,c,d});
     }
     glPushMatrix();glTranslated(.6,-.48,-9.6);glRotated(-18,0,1,0);glRotated(-12,1,0,0);
-    hull();cannon();glPopMatrix();
-    anchor();seabedDetails();
+    hull();wreckFittings();cannon();glPopMatrix();
+    anchor();seabedDetails();spill();
     // A few exposed chain links lead from the anchor ring toward the gap.
     glTexCoord2f(.60f,.55f);glColor3f(.32f,.33f,.33f);
     for(int i=0;i<32;++i){
@@ -204,4 +317,27 @@ void drawGraybox(){
         };
         for(int j=0;j<10;++j) spar(link(j),link(j+1),.032,.032);
     }
+}
+
+// First-person equipment uses eye coordinates. Its barrel points away from
+// the glove, toward the same side of the frame as the spotlight origin.
+void drawHandLight(bool on){
+    glPushMatrix();glLoadIdentity();
+    glTranslated(.36,-.28,-.46);glRotated(16,0,1,0);glRotated(12,1,0,0);
+    glColor3f(.11f,.136f,.145f);
+    spar({0,0,.22},{0,0,-.12},.047,.052,true,24);
+    for(int i=0;i<7;++i){
+        glColor3f(.17f,.19f,.19f);
+        spar({0,0,.10-i*.025},{0,0,.091-i*.025},.053,.053,false,24);
+    }
+    glColor3f(.22f,.245f,.24f);
+    spar({0,0,-.10},{0,0,-.20},.051,.077,true,24);
+    glColor3f(.14f,.16f,.16f);
+    spar({0,0,-.20},{0,0,-.235},.079,.079,true,24);
+    glColor3f(on?.64f:.18f,on?.52f:.16f,on?.21f:.12f);
+    spar({0,0,-.19},{0,0,-.201},.077,.077,false,24);
+    glColor3f(.054f,.073f,.080f);
+    ellipsoid({.04,-.045,.11},{.073,.065,.13});
+    for(int i=0;i<3;++i) ellipsoid({-.015,-.025,.025+i*.045},{.046,.035,.025});
+    glPopMatrix();
 }

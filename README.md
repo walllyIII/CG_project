@@ -1,16 +1,16 @@
 # Wrecklight
 
-A first-person underwater exploration scene for CG 100433, Track 2. During a two-minute dive, the player follows a half-buried anchor chain to a leaning pirate wreck, swims alongside its hull and switches on a dive lamp to inspect a cannon through a breach.
+A first-person night dive for CG 100433, Track 2. Start with a hand torch above a half-buried anchor. Follow the chain past lost cargo, find the skull and crossed bones on the hull, then shine the torch through the breach to inspect the cannon.
 
-**Graphics question.** How can the wreck remain recognizable through blue-green water at a distance while wet wood, exposed iron, rust and sand remain distinguishable up close?
+[Watch the current night dive](docs/night-dive/night-dive.mp4) · [Compare the three views and the torch-off frame](docs/night-dive/review.png)
 
-## The dive
+The torch starts on. Move the mouse to sweep it over the wreck or press **F** to extinguish it. The light originates below and to the right of the diver's eyes. Its strength falls with distance, fades between 8 and 14 scene units, and is blocked by the wreck and cargo. Dim blue-green ambient light preserves a distant silhouette. Drifting silt and water backscatter reveal the beam in front of the diver.
 
-| View | Player experience | Visual checkpoint |
-| --- | --- | --- |
-| Discovery | Start above the anchor and look past the chain toward the broken mast. | The mast and tilted hull form a readable silhouette. |
-| Approach | Follow the chain across pale sand to the ship. | Moving caustics cross the sunlit seabed and upper hull. Sand beneath the hull remains in shadow. |
-| Inspection | Stop outside the breach, switch on the lamp and look around the cannon. | Bare iron shows a tight highlight, damp planks a broader sheen and rust a rough finish. |
+| View | What to look for |
+| --- | --- |
+| Discovery | The light catches the anchor, a slatted crate, a barrel and loose timber. Explore either side of the chain. |
+| Approach | Sweep from the spilled cannonballs up to the raised skull and crossed bones. The damaged stern gallery and torn pennant change the ship's silhouette. |
+| Inspection | Turn across the breach. Broken boards throw shadows onto the deck and barrel. Rust patches, wood grooves and sand ripples respond differently as the beam moves. |
 
 ## Rendering plan
 
@@ -22,7 +22,7 @@ Build on the course OpenGL and GLSL camera, mesh-loading and shader framework. E
 
 ## Scope and delivery
 
-Build one wreck, a small seabed and one exterior route. Prioritize the side facing the diver and the interior visible through the breach. Drifting particles are optional once the core effects pass review. Fish schools, animated seaweed and a traversable cabin are outside the four-week scope.
+Build one wreck, a small seabed and one exterior route. Prioritize the side facing the diver and the interior visible through the breach. Fish schools, animated seaweed and a traversable cabin are outside the four-week scope.
 
 Deliver a runnable scene, an approximately two-minute video, fixed-view effect comparisons, performance measurements and a report crediting models and textures. The target is **1080p at an average of at least 30 FPS on the presentation computer**.
 
@@ -54,7 +54,7 @@ Press **1**, **2** or **3** to return to the discovery, approach or inspection c
 
 The replay renders 1,201 frames along the exterior route using a fixed simulation clock of 10 steps per second. It writes three PPM files at simulated times 0, 60 and 120 seconds. The PNGs below were converted from those framebuffers at their original 1280 x 720 resolution. Replay runs as fast as the renderer allows.
 
-### Team review
+### Original graybox team review
 
 | Fixed view | Frame | Question for reviewers |
 | --- | --- | --- |
@@ -68,7 +68,7 @@ The images above are the original week-one layout references. The current render
 
 ## Week-two lighting review
 
-Toggle **V** for water attenuation, **C** for caustics, **H** for sun shadows and **F** for the dive lamp. Sun shadows, water and caustics start enabled. The interactive lamp starts off. Route replay switches it on during the final approach. The static hull and sunlight share a 1024-square directional depth map, sampled with a 3 x 3 visibility filter. Two scrolling layers sample a procedurally generated periodic caustic texture. Material response uses a GGX specular term, distinct roughness and metalness values, procedural surface relief and rust patches.
+Toggle **V** for water attenuation, **C** for caustics, **H** for sun shadows and **F** for the dive lamp. These archived comparisons show the earlier sunlit build. In the current night dive the torch is on from the start. The static hull and sunlight share a 1024-square directional depth map, sampled with a 3 x 3 visibility filter. Two scrolling layers sample a procedurally generated periodic caustic texture. Material response uses a GGX specular term, distinct roughness and metalness values, procedural surface relief and rust patches.
 
 Run `./build/wrecklight.exe --review build/review` to capture twelve 1280 x 720 PPM files with fixed lighting, cameras and animation times. The [effect comparison sheet](docs/week2/comparisons.png) shows the main toggles.
 
@@ -82,7 +82,7 @@ The captures and full route were rendered on Intel Arc graphics. The week-two ca
 
 ## Week-three scene and first recording
 
-[Watch the two-minute dive](docs/week3/first-dive.mp4) or inspect the [discovery](docs/week3/discovery.png), [approach](docs/week3/approach.png) and [inspection](docs/week3/inspection.png) frames. The original camera bookmarks are used throughout. The lamp comes on at 1:45 as the diver reaches the breach.
+[Watch the two-minute dive](docs/week3/first-dive.mp4) or inspect the [discovery](docs/week3/discovery.png), [approach](docs/week3/approach.png) and [inspection](docs/week3/inspection.png) frames. The original camera bookmarks are used throughout. This archived sunlit recording switches on the lamp at 1:45.
 
 Individual timber strakes, splintered ends and exposed framing now define the approach side. The cannon has a recessed muzzle, reinforcement rings, trunnions and a planked platform. Stone patches and short static seagrass flank the anchor chain. The geometry and procedural materials are authored in the project source.
 
