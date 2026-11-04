@@ -10,7 +10,7 @@
 #include <cmath>
 #include <vector>
 
-void drawGraybox();
+void drawGraybox(double time);
 namespace {
 GLuint program=0, pattern=0;
 Target shadow,torch;
@@ -177,7 +177,7 @@ bool initEffects(){
     // Geometry and sunlight are static, so the shadow map only needs one pass.
     shadow.bind();glEnable(GL_DEPTH_TEST);glClear(GL_DEPTH_BUFFER_BIT);
     glMatrixMode(GL_PROJECTION);lightMatrix();
-    glMatrixMode(GL_MODELVIEW);glLoadIdentity();drawGraybox();
+    glMatrixMode(GL_MODELVIEW);glLoadIdentity();drawGraybox(0);
     bindScreen(1280,720);makePattern();
     shader::bind(program);
     setInt(location(program,"depthMap"),0);setInt(location(program,"patternMap"),1);
@@ -195,7 +195,7 @@ void bindEffects(const Effects& e,double time,double x,double y,double z,double 
         glFrustum(-.078,.078,-.078,.078,.15,14.);
         glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();
         glTranslated(-.36,.28,.22);glRotated(-pitch,1,0,0);glRotated(yaw,0,1,0);glTranslated(-x,-y,-z);
-        drawGraybox();glPopMatrix();glMatrixMode(GL_PROJECTION);glPopMatrix();
+        drawGraybox(time);glPopMatrix();glMatrixMode(GL_PROJECTION);glPopMatrix();
         bindScreen(viewport[2],viewport[3]);shader::bind(program);
     }
     activeTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,torch.depth);

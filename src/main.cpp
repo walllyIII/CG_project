@@ -11,22 +11,25 @@
 #include <iostream>
 #include <string>
 #include <vector>
-void drawGraybox();
+void drawGraybox(double time);
 
 namespace {
 constexpr double rad=3.141592653589793/180;
 struct Camera {double x=0,y=3.25,z=12,yaw=-12,pitch=-19;};
-constexpr Camera views[]={{}, {-1.35,2.45,2.5,12,-9}, {2.15,3.45,-5.65,-22,-20}};
+constexpr Camera views[]={{}, {-1.35,2.45,2.5,12,-9}, {2.15,3.45,-5.65,-22,-20},{1.3101,3.4835,-7.5140,30.1826,-29.5680},{0.4927,3.4423,-7.7811,-3.8180,-36.5875},{0.6520,3.3110,-7.7215,-0.6869,-9.4501}};
 constexpr const char* names[]={"discovery","approach","inspection"};
 
 // Replay 120 seconds of camera travel on a fixed simulation clock. The same
 // poses drive the interactive bookmarks and the captured review frames.
 Camera routePose(double frame){
-    constexpr int legFrames=600;
-    int leg=std::min(static_cast<int>(frame/legFrames),1);
-    double t=double(frame-leg*legFrames)/legFrames;
+    struct Stop {double frame; int view;};
+    constexpr Stop stops[]={{0,0},{600,1},{800,2},{900,3},{1010,4},{1110,5},{1200,2}};
+    int leg=0;
+    while(leg<5 && frame>stops[leg+1].frame) ++leg;
+    const Stop from=stops[leg],to=stops[leg+1];
+    double t=(frame-from.frame)/(to.frame-from.frame);
     t=t*t*(3-2*t);
-    const Camera &a=views[leg], &b=views[leg+1];
+    const Camera &a=views[from.view], &b=views[to.view];
     auto mix=[&](double x,double y){return x+(y-x)*t;};
     return {mix(a.x,b.x),mix(a.y,b.y),mix(a.z,b.z),mix(a.yaw,b.yaw),mix(a.pitch,b.pitch)};
 }
@@ -42,7 +45,7 @@ void look(GLFWwindow* w,double x,double y){
 void move(GLFWwindow* w,Camera &c,double dt){
     auto key=[&](int k){return glfwGetKey(w,k)==GLFW_PRESS;};
     if(key(GLFW_KEY_ESCAPE)) glfwSetWindowShouldClose(w,true);
-    for(int i=0;i<3;++i){
+    for(int i=0;i<6;++i){
         if(key(GLFW_KEY_1+i) || (i==0 && key(GLFW_KEY_R))){c=views[i];return;}
     }
     double yaw=c.yaw*rad;
@@ -71,7 +74,7 @@ void render(const Camera &c,int w,int h,const Effects& effects,double time){
     glMatrixMode(GL_MODELVIEW);glLoadIdentity();
     glRotated(-c.pitch,1,0,0);glRotated(c.yaw,0,1,0);glTranslated(-c.x,-c.y,-c.z);
     bindEffects(effects,time,c.x,c.y,c.z,c.yaw,c.pitch);
-    drawGraybox();
+    drawGraybox(time);
     finishDiveView(effects.lamp,time);
 }
 // PPM keeps the framebuffer capture independent of image-library dependencies.
@@ -117,7 +120,8 @@ int main(int argc,char** argv){
         {"near-oblique",2,{true,true,true,true},4},
         {"plank-near",2,{true,false,true,true},4},
         {"plank-middle",2,{true,false,true,true},4},
-        {"plank-far",2,{true,false,true,true},4}
+        {"plank-far",2,{true,false,true,true},4},
+        {"gun-room-rope",3,{},4},{"gun-room-crate",4,{},4},{"gun-room-berth",5,{},4},{"gun-room-berth-later",5,{},6}
     };
     constexpr int filmFrames=24*120;
     std::vector<char> filmPixels;

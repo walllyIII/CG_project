@@ -2,7 +2,7 @@
 
 A first-person night dive for CG 100433, Track 2. Start with a hand torch above a half-buried anchor. Follow the chain past lost cargo, find the skull and crossed bones on the hull, then shine the torch through the breach to inspect the cannon.
 
-[Watch the current night dive](docs/night-dive/night-dive.mp4) · [Compare the three views and the torch-off frame](docs/night-dive/review.png)
+[Watch the current dive and gun-room inspection](docs/gun-room/dive.mp4) · [Compare the three views and the torch-off frame](docs/night-dive/review.png)
 
 The torch starts on. Move the mouse to sweep it over the wreck or press **F** to extinguish it. The light originates below and to the right of the diver's eyes. Its strength falls with distance, fades between 8 and 14 scene units, and is blocked by the wreck and cargo. Dim blue-green ambient light preserves a distant silhouette. Drifting silt and water backscatter reveal the beam in front of the diver.
 
@@ -11,6 +11,12 @@ The torch starts on. Move the mouse to sweep it over the wreck or press **F** to
 | Discovery | The light catches the anchor, a slatted crate, a barrel and loose timber. Explore either side of the chain. |
 | Approach | Sweep from the spilled cannonballs up to the raised skull and crossed bones. The damaged stern gallery and torn pennant change the ship's silhouette. |
 | Inspection | Turn across the breach. Broken boards throw shadows onto the deck and barrel. Rust patches, wood grooves and sand ripples respond differently as the beam moves. |
+
+## Inside the broken gunport
+
+Press **3** for the muzzle. Press **4** to look along the barrel at the frayed breeching rope, its barnacled ring and the overturned shot rack. The loose shot collects on the lower, far side of the deck. Press **5** for the crushed locker. A fallen beam pins the lid over a tin cup and ceramic shards. Sweep the torch over the slanted silver coins caught in the seams. Press **6** to look up at the torn hammock and unlit lantern. The canvas and lantern move slowly around their supports, and the torch shadows follow them.
+
+All four viewpoints stay on the water side of the broken hull. The final forty seconds of the replay visit the three details and return to the muzzle. [See the four inspection frames](docs/gun-room/review.png).
 
 ## Rendering plan
 
@@ -70,7 +76,7 @@ The images above are the original week-one layout references. The current render
 
 Toggle **V** for water attenuation, **C** for caustics, **H** for sun shadows and **F** for the dive lamp. These archived comparisons show the earlier sunlit build. In the current night dive the torch is on from the start. The static hull and sunlight share a 1024-square directional depth map, sampled with a 3 x 3 visibility filter. Two scrolling layers sample a procedurally generated periodic caustic texture. Material response uses a GGX specular term, distinct roughness and metalness values, procedural surface relief and rust patches.
 
-Run `./build/wrecklight.exe --review build/review` to capture twelve 1280 x 720 PPM files with fixed lighting, cameras and animation times. The [effect comparison sheet](docs/week2/comparisons.png) shows the main toggles.
+Run `./build/wrecklight.exe --review build/review` to capture the 1280 x 720 PPM comparison files with fixed lighting, cameras and animation times. The [effect comparison sheet](docs/week2/comparisons.png) shows the main toggles.
 
 | Check | Evidence and observation |
 | --- | --- |

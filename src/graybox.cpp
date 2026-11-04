@@ -130,9 +130,9 @@ void cannon(){
     }
     glPopMatrix();
     glTexCoord2f(.58f,0);glColor3f(.18f,.085f,.037f);
-    for(int j=0;j<9;++j){
-        double x=-.72+.39*j;
-        face({{x,1.74,-1.6},{x,1.74,1.5},{x+.38,1.74,1.5},{x+.38,1.74,-1.6}});
+    for(int j=0;j<20;++j){
+        double x=-3.48+.34*j;
+        face({{x,1.74,-1.82},{x,1.74,1.47},{x+.328,1.74,1.47},{x+.328,1.74,-1.82}});
     }
 }
 void anchor(){
@@ -170,6 +170,121 @@ void ellipsoid(Point c,Point radii){
         if(j>0) face({vertex(i,j),vertex(i+1,j),vertex(i+1,j+1)});
         if(j<9) face({vertex(i,j),vertex(i+1,j+1),vertex(i,j+1)});
     }
+}
+void hoops(Point center,double rx,double ry,double tube){
+    for(int i=0;i<18;++i){
+        auto edge=[&](int j){double t=j*2*pi/18;return center+Point{rx*std::cos(t),ry*std::sin(t),0};};
+        spar(edge(i),edge(i+1),tube,tube,false,6);
+    }
+}
+void gunRoom(double time){
+    // The roll of the hull makes negative local Z the low side.
+    glTexCoord2f(.53f,0);glColor3f(.18f,.089f,.041f);
+    timber({2.12,2.66,-1.77},.23,1.86,.25);
+    glTexCoord2f(.58f,.83f);glColor3f(.22f,.19f,.14f);
+    hoops({2.12,2.52,-1.57},.135,.16,.037);
+    glTexCoord2f(.83f,0);glColor3f(.59f,.54f,.40f);
+    for(int i=0;i<15;++i){
+        double t=i*2.4;
+        Point base{2.12+.16*std::cos(t),2.52+.18*std::sin(t),-1.63};
+        spar(base,base+Point{.01,.012,.046},.038,.021,false,7);
+    }
+    // Three twisted hemp strands pass through the ring and slacken onto the deck.
+    Point knots[]={{2.18,2.35,-1.72},{2.12,2.55,-1.58},{2.05,2.43,-1.43},
+                   {2.04,1.95,-1.19},{1.91,1.80,-.87},{2.18,1.80,-.49},{2.43,1.80,-.61}};
+    glTexCoord2f(.81f,0);
+    for(int strand=0;strand<3;++strand){
+        glColor3d(.33+.047*strand,.21+.034*strand,.106+.021*strand);
+        Point prev=knots[0];
+        for(int j=0;j<6;++j) for(int k=1;k<=10;++k){
+            double t=k/10.,phase=(10*j+k)*.68+strand*2*pi/3;
+            Point next=knots[j]+(knots[j+1]-knots[j])*t+Point{.029*std::cos(phase),.014*std::sin(phase),.026*std::sin(phase)};
+            spar(prev,next,.023,.022,false,6);prev=next;
+        }
+        for(int k=0;k<3;++k){
+            double t=strand*.65+k*.41;
+            spar(prev,prev+Point{.13+.07*std::cos(t),.025*std::sin(4*t),.12*std::sin(2*t)},.010,.002,true,5);
+        }
+    }
+    glTexCoord2f(.56f,0);glColor3f(.23f,.11f,.049f);
+    glPushMatrix();glTranslated(2.72,1.98,-1.66);glRotated(71,0,0,1);
+    for(double x:{-.14,.14}) timber({x,0,0},.065,.26,.64);
+    for(double z:{-.25,.25}) timber({0,-.095,z},.33,.07,.075);
+    glPopMatrix();
+    glTexCoord2f(.52f,.89f);glColor3f(.20f,.21f,.20f);
+    for(Point p: {Point{2.15,1.89,-1.59},Point{2.46,1.89,-1.64},Point{2.78,1.89,-1.39},Point{2.99,1.89,-1.64}})
+        ellipsoid(p,{.15,.15,.15});
+    // A low wedge of sediment overlaps the feet of the carriage.
+    glTexCoord2f(.94f,0);glColor3f(.43f,.34f,.20f);
+    for(int i=0;i<18;++i){
+        auto edge=[](int j){double t=j*pi/9;return Point{1.12+.81*std::cos(t),1.746,.07+.73*std::sin(t)};};
+        face({edge(i),edge(i+1),{1.23,1.91,-.22}});
+    }
+    // A sheared lid exposes only the near corner of the crushed box.
+    glPushMatrix();glTranslated(-.59,1.75,-.39);
+    glTexCoord2f(.59f,0);glColor3f(.30f,.16f,.07f);
+    for(double x:{-.43,.43})timber({x,.21,0},.065,.42,.80);
+    timber({0,.20,-.37},.86,.40,.065);timber({0,.12,.37},.86,.24,.06);
+    timber({0,.22,0},.82,.05,.72);
+    for(int i=0;i<4;++i){
+        double length=i<2?.80:(i==2?.49:.28);
+        timber({-.32+i*.215,.435,-.40+length*.5},.208,.072,length);
+    }
+    for(int i=0;i<4;++i){
+        double x=.16+i*.041;
+        face({{x,.468,-.115},{x+.04,.468,-.114},{x+.025,.463,.046+.035*std::sin(i)}});
+    }
+    glColor3f(.15f,.074f,.032f);
+    glPushMatrix();glTranslated(-.25,.61,-.08);glRotated(-15,0,0,1);glRotated(32,0,1,0);
+    timber({0,0,0},2.26,.23,.27);glPopMatrix();
+    // Tin cup with an open mouth, a rolled lip and a loop handle.
+    glTexCoord2f(.29f,.76f);glColor3f(.67f,.67f,.60f);
+    spar({.23,.245,.17},{.23,.48,.17},.064,.087,false,24);
+    glPushMatrix();glTranslated(.23,.48,.17);glRotated(90,1,0,0);hoops({0,0,0},.087,.087,.009);glPopMatrix();
+    hoops({.326,.384,.17},.042,.059,.010);
+    glTexCoord2f(.32f,0);glColor3f(.80f,.81f,.71f);
+    for(int i=0;i<6;++i){
+        double x=.03+.048*i,z=.28+.037*std::sin(2.8*i);
+        face({{x,.253,z},{x+.074,.26,z+.026},{x+.026,.284,z-.052}});
+    }
+    glPopMatrix();
+    glTexCoord2f(.18f,.79f);glColor3f(.85f,.84f,.76f);
+    for(int i=0;i<5;++i){
+        double x=-.098-.34*(i%2),z=.21+i*.095;
+        glPushMatrix();glTranslated(x,1.757,z);glRotated(12+i*9,0,1,0);glRotated(26+i*8,1,0,0);
+        spar({0,-.007,0},{0,.006,0},.057,.057,false,24);
+        spar({0,.006,0},{0,.010,0},.057,.051,true,24);
+        spar({0,.010,0},{0,.012,0},.024,.021,true,8);glPopMatrix();
+    }
+    // Torn canvas snagged on projecting wood at the left edge of the opening.
+    glTexCoord2f(.86f,0);glColor3f(.32f,.14f,.09f);
+    for(int i=0;i<5;++i){double x=.06+i*.043;
+        face({{x,2.94,2.14},{x+.046,2.93,2.15},{x+.082,2.68-.12*std::sin(i),2.21}});
+    }
+    // The line ends stay fixed as the belly of the torn hammock sways.
+    glColor3f(.37f,.32f,.21f);
+    for(int i=0;i<19;++i){
+        auto cloth=[&](int j,double side){
+            double t=j/19.,sag=std::sin(pi*t);
+            return Point{-2.31+3.16*t,3.78-.67*sag+.115*side*side*sag,
+                         -1.24+sag*(.36*side+.064*std::sin(.73*time))};
+        };
+        if(i==0 || i==18) continue;
+        face({cloth(i,-1),cloth(i+1,-1),cloth(i+1,0),cloth(i,0)});
+        if(i%7!=3) face({cloth(i,0),cloth(i+1,0),cloth(i+1,1),cloth(i,1)});
+    }
+    glColor3f(.18f,.09f,.041f);timber({-.55,3.91,-1.26},3.72,.18,.18);
+    for(double x:{-2.10,.65}) spar({x,3.90,-1.24},{x,3.63,-1.24},.021,.021);
+    glPushMatrix();glTranslated(-.48,3.81,-1.09);glRotated(4.*std::sin(.87*time),0,0,1);
+    glTexCoord2f(.54f,.7f);glColor3f(.33f,.24f,.12f);
+    hoops({0,-.095,0},.076,.105,.015);
+    spar({0,-.22,0},{0,-.26,0},.074,.13);
+    for(int j=0;j<4;++j){double t=j*pi/2;Point foot{.095*std::cos(t),-.51,.095*std::sin(t)};
+        spar(foot,foot+Point{0,.26,0},.012,.012);}
+    spar({0,-.56,0},{0,-.50,0},.085,.12);
+    glTexCoord2f(.73f,0);glColor3f(.10f,.088f,.065f);
+    spar({0,-.50,0},{0,-.39,0},.05,.024);
+    glPopMatrix();
 }
 void pirateCrest(){
     // A carved escutcheon bolted beside the breach: crossed bones, a domed
@@ -293,7 +408,7 @@ void seabedDetails(){
     }
 }
 }
-void drawGraybox(){
+void drawGraybox(double time){
     // Low relief on a neutral seabed provides scale without finished materials.
     for(int z=-70;z<36;z+=2) for(int x=-60;x<60;x+=2){
         double shade=.55+.004*std::sin(x*.72+z*.57);
@@ -303,7 +418,7 @@ void drawGraybox(){
         face({a,b,c});face({a,c,d});
     }
     glPushMatrix();glTranslated(.6,-.48,-9.6);glRotated(-18,0,1,0);glRotated(-12,1,0,0);
-    hull();wreckFittings();cannon();glPopMatrix();
+    hull();wreckFittings();cannon();gunRoom(time);glPopMatrix();
     anchor();seabedDetails();spill();
     // A few exposed chain links lead from the anchor ring toward the gap.
     glTexCoord2f(.60f,.55f);glColor3f(.32f,.33f,.33f);
