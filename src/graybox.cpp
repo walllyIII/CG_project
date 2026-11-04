@@ -122,9 +122,9 @@ void cannon(){
         auto rim=[](int j,double radius,double z){
             return Point{radius*std::cos(j*pi/16),radius*std::sin(j*pi/16),z};
         };
-        glColor3f(.34f,.35f,.35f);
+        glTexCoord2f(.27f,.79f);glColor3f(.31f,.40f,.46f);
         face({rim(i,.35,1.33),rim(i+1,.35,1.33),rim(i+1,.21,1.33),rim(i,.21,1.33)});
-        glColor3f(.09f,.10f,.11f);
+        glTexCoord2f(.59f,.85f);glColor3f(.09f,.10f,.11f);
         face({rim(i,.21,1.33),rim(i+1,.21,1.33),rim(i+1,.21,.88),rim(i,.21,.88)});
         face({{0,0,.88},rim(i,.21,.88),rim(i+1,.21,.88)});
     }
@@ -136,7 +136,7 @@ void cannon(){
     }
 }
 void anchor(){
-    glPushMatrix();glTranslated(-2.9,.18,5.6);glRotated(-22,0,1,0);
+    glPushMatrix();glTranslated(-2.9,-.78,5.6);glRotated(-22,0,1,0);
     glRotated(20,1,0,0);
     glTexCoord2f(.56f,.62f);glColor3f(.24f,.26f,.26f);
     spar({0,0,0},{0,.15,-2.05},.14,.11);
@@ -152,7 +152,15 @@ void anchor(){
     }
     glPopMatrix();
 }
-double bed(double x,double z){return -.13+.13*std::sin(.32*x+.27*z)+.06*std::cos(.53*x-.39*z);}
+double bed(double x,double z){
+    // A long drift piles against the buried lower strakes. Smaller swells
+    // and asymmetric ripple crests share one height field with the props.
+    double axis=z+9.0-.32*x;
+    double bank=1.58*std::exp(-axis*axis/4.6-x*x/58.);
+    double crest=std::sin(6.1*z+2.8*x+.90*std::sin(.7*x)+.58*std::sin(.63*z));
+    return -.13+bank+.12*std::sin(.33*x+.25*z)+.055*std::cos(.53*x-.39*z)
+        +(.028+.012*std::sin(x*.69))*crest+.012*crest*crest;
+}
 // Rectangular timbers keep a closed end grain and cast solid torch shadows.
 void timber(Point c,double w,double h,double d){
     Point a{c.x-w/2,c.y-h/2,c.z-d/2}, b{a.x+w,a.y,a.z};
@@ -257,9 +265,27 @@ void gunRoom(double time){
         spar({0,.010,0},{0,.012,0},.024,.021,true,8);glPopMatrix();
     }
     // Torn canvas snagged on projecting wood at the left edge of the opening.
-    glTexCoord2f(.86f,0);glColor3f(.32f,.14f,.09f);
-    for(int i=0;i<5;++i){double x=.06+i*.043;
-        face({{x,2.94,2.14},{x+.046,2.93,2.15},{x+.082,2.68-.12*std::sin(i),2.21}});
+    glTexCoord2f(.86f,0);glColor3f(.19f,.17f,.105f);
+    // The soaked strip stays caught on a splinter. Its free end crosses
+    // the light path just in front of the gun, including in the depth pass.
+    auto strip=[&](int j,double side){
+        double t=j/15.,wave=std::sin(.96*time-4.6*t);
+        return Point{.03+1.03*t+side*.018,2.94-.36*t+.19*t*wave+side*(.078-.053*t),
+                     2.15-.41*t+.16*t*std::sin(.77*time-3.*t)+side*.027};
+    };
+    for(int i=0;i<15;++i){
+        double tornEdge=(i==9 || i==12)?.23:1.;
+        face({strip(i,-1),strip(i+1,-1),strip(i+1,tornEdge),strip(i,1)});
+    }
+    for(int i=-2;i<=2;++i){
+        Point root=strip(15,i*.42);
+        face({root,root+Point{0,.013,0},root+Point{.11+.025*i,.025*std::sin(time+i),-.05}});
+    }
+    glTexCoord2f(.89f,0);glColor3f(.46f,.48f,.39f);
+    for(int i=0;i<32;++i){
+        double x=.018+.23*(.5+.5*std::sin(i*2.4)),y=2.81+.21*std::cos(i*3.88);
+        Point foot{x,y,2.15+(y-2.8)*.47};
+        spar(foot,foot+Point{.009,.012,.043},.025+.008*(i%3),.014,false,8);
     }
     // The line ends stay fixed as the belly of the torn hammock sways.
     glColor3f(.37f,.32f,.21f);
@@ -350,11 +376,13 @@ void barrel(double x,double z,double yaw,double scale){
     glPopMatrix();
 }
 void spill(){
-    barrel(-1.8,-1.1,48,1.18);barrel(-2.8,-2.,-32,.91);barrel(2.3,-4.7,64,1.);
-    barrel(1.7,3.8,22,.81);
+    // The long spar arrests a barrel downslope of the breach.
+    barrel(.28,-5.40,75,1.02);barrel(-1.0,-6.58,-36,.84);
+    glTexCoord2f(.62f,0);glColor3f(.22f,.115f,.046f);
+    spar({-2.28,bed(-2.28,-5.65)-.32,-5.65},{1.82,bed(1.82,-4.81)+.74,-4.81},.23,.15);
     // Cargo crates of different sizes, with individual slats and inset seams.
-    for(int i=0;i<4;++i){
-        const double xs[]={.62,-2.8,2.9,-3.4},zs[]={2.8,-3.5,-3.,-4.8};
+    for(int i=0;i<2;++i){
+        const double xs[]={1.25,-1.88},zs[]={-5.86,-6.25};
         double x=xs[i],z=zs[i];
         glPushMatrix();glTranslated(x,bed(x,z)+.31,z);glRotated(22+i*29,0,1,0);glRotated(i*4,0,0,1);
         glTexCoord2f(.59f,0);
@@ -369,21 +397,21 @@ void spill(){
         glPushMatrix();glRotated(29,0,0,1);timber({0,0,.409},1.10,.095,.08);glPopMatrix();
         glPopMatrix();
     }
-    for(int j=0;j<32;++j){
-        double x=3.7*std::sin(j*7.31),z=4.4-10.*(.5+.5*std::cos(j*2.32));
+    for(int j=0;j<15;++j){
+        double x=.32+1.85*std::sin(j*7.31),z=-5.64+.93*std::cos(j*2.32);
         glPushMatrix();glTranslated(x,bed(x,z)+.025,z);glRotated(j*97.,0,1,0);glRotated(4.*std::sin(j),0,0,1);
         glTexCoord2f(.57f,0);glColor3d(.19+.025*(j%4),.092,.044);
         timber({0,0,0},.46+.29*(j%6),.09,.12+.025*(j%5));glPopMatrix();
     }
     glTexCoord2f(.43f,.91f);glColor3f(.21f,.19f,.17f);
     for(int j=0;j<9;++j){
-        double x=1.3+.85*std::sin(j*4.4),z=-3.9+.8*std::cos(j*2.5);
-        ellipsoid({x,bed(x,z)+.13,z},{.17,.17,.17});
+        double x=1.45+.52*std::sin(j*4.4),z=-4.67+.35*std::cos(j*2.5);
+        ellipsoid({x,bed(x,z)-.085,z},{.17,.17,.17});
     }
 }
 void seabedDetails(){
     // Low, asymmetric stones collect in patches beside the swimming corridor.
-    for(int group=0;group<10;++group){
+    for(int group=5;group<9;++group){
         double cx=(group%2?-1.:1.)*(4.+1.4*std::sin(group*3.7));
         double cz=8.-group*2.35;
         for(int j=0;j<9;++j){
@@ -408,23 +436,27 @@ void seabedDetails(){
     }
 }
 }
-void drawGraybox(double time){
-    // Low relief on a neutral seabed provides scale without finished materials.
-    for(int z=-70;z<36;z+=2) for(int x=-60;x<60;x+=2){
-        double shade=.55+.004*std::sin(x*.72+z*.57);
-        glTexCoord2f(.93f,0);glColor3d(shade,shade*.79,shade*.49);
-        Point a{x*1.,bed(x,z),z*1.}, b{x*1.,bed(x,z+2),z+2.},
-              c{x+2.,bed(x+2,z+2),z+2.}, d{x+2.,bed(x+2,z),z*1.};
-        face({a,b,c});face({a,c,d});
+void staticWreck(){
+    // More samples near the dive path resolve small sand ridges in silhouette
+    // and in the torch shadow map. Outer strips share the same boundary vertices.
+    for(double z=-70;z<36;){
+        double nextZ=z+(z>=-16 && z<16?.125:2.);
+        glTexCoord2f(.93f,0);glColor3f(.42f,.37f,.27f);glBegin(GL_TRIANGLE_STRIP);
+        for(double x=-60;x<=60;x+=(x>=-12 && x<12?.125:2.)){
+            for(double row:{z,nextZ}){
+                Point n=unit({bed(x-.045,row)-bed(x+.045,row),.09,bed(x,row-.045)-bed(x,row+.045)});
+                glNormal3d(n.x,n.y,n.z);glVertex3d(x,bed(x,row),row);
+            }
+        }
+        glEnd();z=nextZ;
     }
     glPushMatrix();glTranslated(.6,-.48,-9.6);glRotated(-18,0,1,0);glRotated(-12,1,0,0);
-    hull();wreckFittings();cannon();gunRoom(time);glPopMatrix();
+    hull();wreckFittings();cannon();glPopMatrix();
     anchor();seabedDetails();spill();
-    // A few exposed chain links lead from the anchor ring toward the gap.
     glTexCoord2f(.60f,.55f);glColor3f(.32f,.33f,.33f);
-    for(int i=0;i<32;++i){
+    for(int i=-10;i<32;++i){
         double z=3.65-i*.34, x=-2.12+i*.105;
-        double y=bed(x,z)+.055+1.0*std::exp(-.34*i);
+        double y=bed(x,z)-.085+.15*std::cos((i+7)*.59);
         auto link=[&](int j){
             double t=2*pi*j/10, across=.11*std::cos(t), along=.20*std::sin(t);
             return Point{x+across*(i%2?.5:1)-along*.28,
@@ -432,6 +464,16 @@ void drawGraybox(double time){
         };
         for(int j=0;j<10;++j) spar(link(j),link(j+1),.032,.032);
     }
+}
+
+void drawGraybox(double time){
+    static GLuint fixedScene=0;
+    if(!fixedScene){
+        fixedScene=glGenLists(1);glNewList(fixedScene,GL_COMPILE);staticWreck();glEndList();
+    }
+    glCallList(fixedScene);
+    glPushMatrix();glTranslated(.6,-.48,-9.6);glRotated(-18,0,1,0);glRotated(-12,1,0,0);
+    gunRoom(time);glPopMatrix();
 }
 
 // First-person equipment uses eye coordinates. Its barrel points away from

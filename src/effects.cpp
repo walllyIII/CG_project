@@ -74,10 +74,26 @@ float torchVisibility(vec3 ray){
     float depth=14./13.85*(1.-.15/z);
     float total=0.;
     for(int i=-1;i<=1;i++) for(int j=-1;j<=1;j++)
-        total+=step(depth-.00085,texture2D(torchMap,uv+vec2(i,j)/768.).r);
+        total+=step(depth-.0013,texture2D(torchMap,uv+vec2(i,j)/768.).r);
     return total/9.;
 }
+vec3 waterScatter(vec3 endpoint){
+    if(!water || !lamp) return vec3(0.);
+    float dist=length(endpoint),reach=min(dist,11.);
+    vec3 dir=endpoint/max(dist,.001);
+    float scatter=0.;
+    for(int i=0;i<10;i++){
+        float t=(float(i)+.5)*reach/10.;
+        vec3 q=dir*t-vec3(.36,-.28,-.22);
+        scatter+=smoothstep(.84,.988,-normalize(q).z)*exp(-.38*t)*reach/10.;
+    }
+    return scatter*vec3(.0019,.0048,.0074);
+}
 void main(){
+    if(surface.x<0.){
+        vec3 haze=vec3(.00035,.0018,.0039)+waterScatter(eye);
+        gl_FragColor=vec4(pow(haze,vec3(1./2.2)),1.);return;
+    }
     float dist=length(eye);
     vec3 V=normalize(mat3(gl_TextureMatrix[0])*(-eye));
     vec3 N=normalize(n);
@@ -114,27 +130,17 @@ void main(){
                +.45*texture2D(patternMap,uv*1.37-clockTime*vec2(.007,.012)).r;
     float caustic=caustics?lines*smoothstep(.05,.72,dot(N,sun))*exp(-.055*max(0.,8.-world.y)):0.;
     vec3 color=.0018*base+lit*vec3(.045,.11,.16)*(.095+.07*caustic)*brdf(N,V,sun,base,rough,metal);
-    vec3 waterColor=vec3(.00055,.0017,.0027);
+    vec3 waterColor=vec3(.00035,.0018,.0039);
     vec3 ray=eye-vec3(.36,-.28,-.22);
     float range=length(ray);
-    float beam=smoothstep(.900,.974,-ray.z/max(.001,range));
+    float beam=smoothstep(.879,.981,-ray.z/max(.001,range));
     if(lamp && beam>0. && range<14. && ray.z<-.15){
         vec3 L=normalize(mat3(gl_TextureMatrix[0])*(-ray));
-        float power=49.*beam*(1.-smoothstep(8.,14.,range))/(1.+.24*range*range);
+        float power=31.*beam*(1.-smoothstep(5.5,11.,range))/(1.+.30*range*range);
         color+=vec3(.90,.97,1.)*power*torchVisibility(ray)*brdf(N,V,L,base,rough,metal);
     }
-    if(water) color=mix(waterColor,color,exp(-dist*vec3(.077,.039,.029)));
-    // Integrate backscatter only inside the cone and in front of the first surface.
-    if(water && lamp){
-        vec3 dir=eye/max(dist,.001);
-        float reach=min(dist,14.), scatter=0.;
-        for(int i=0;i<8;i++){
-            float t=(float(i)+.5)*reach/8.;
-            vec3 q=dir*t-vec3(.36,-.28,-.22);
-            scatter+=smoothstep(.9,.98,-normalize(q).z)*exp(-.34*t)*reach/8.;
-        }
-        color+=scatter*vec3(.0009,.0016,.0021);
-    }
+    if(water) color=mix(waterColor,color,exp(-dist*vec3(.172,.090,.063)));
+    color+=waterScatter(eye);
     color=color/(1.+color);
     gl_FragColor=vec4(pow(clamp(color,0.,1.),vec3(1./2.2)),1.);
 })";
@@ -195,7 +201,8 @@ void bindEffects(const Effects& e,double time,double x,double y,double z,double 
         glFrustum(-.078,.078,-.078,.078,.15,14.);
         glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();
         glTranslated(-.36,.28,.22);glRotated(-pitch,1,0,0);glRotated(yaw,0,1,0);glTranslated(-x,-y,-z);
-        drawGraybox(time);glPopMatrix();glMatrixMode(GL_PROJECTION);glPopMatrix();
+        glEnable(GL_POLYGON_OFFSET_FILL);glPolygonOffset(2.5f,3.f);
+        drawGraybox(time);glDisable(GL_POLYGON_OFFSET_FILL);glPopMatrix();glMatrixMode(GL_PROJECTION);glPopMatrix();
         bindScreen(viewport[2],viewport[3]);shader::bind(program);
     }
     activeTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,torch.depth);
@@ -216,23 +223,27 @@ void finishDiveView(bool on,double time){
         // hides particles behind wreckage and the range test bounds visibility.
         GLdouble m[16];glGetDoublev(GL_MODELVIEW_MATRIX,m);
         glEnable(GL_BLEND);glBlendFunc(GL_SRC_ALPHA,GL_ONE);glDepthMask(GL_FALSE);
-        glPointSize(1.8f);glBegin(GL_POINTS);
-        unsigned state=317u;
-        auto random=[&](){state=1664525u*state+1013904223u;return (state>>8)/16777216.;};
-        for(int i=0;i<2100;++i){
-            double x=-8.+16.*random()+.23*std::sin(time*.37+i);
-            double y=.12+6.*random()+.06*std::cos(time*.51+i);
-            double z=-13.+27.*random();
-            double ex=m[0]*x+m[4]*y+m[8]*z+m[12]-.36;
-            double ey=m[1]*x+m[5]*y+m[9]*z+m[13]+.28;
-            double ez=-(m[2]*x+m[6]*y+m[10]*z+m[14]+.22);
-            if(ez<.55 || ez>9.) continue;
-            double radial=(ex*ex+ey*ey)/(ez*ez);
-            if(radial>.18) continue;
-            glColor4d(.58,.75,.76,.48*(1.-radial/.18)*(1.-ez/9.));
-            glVertex3d(x,y,z);
+        glEnable(GL_POINT_SMOOTH);
+        for(int layer=0;layer<2;++layer){
+            glPointSize(layer==0?2.1f:4.6f);glBegin(GL_POINTS);
+            unsigned state=317u;
+            auto random=[&](){state=1664525u*state+1013904223u;return (state>>8)/16777216.;};
+            for(int i=0;i<13000;++i){
+                double x=-13.+std::fmod(26.*random()+time*.17,26.);
+                double y=.08+9.*random()+.09*std::cos(time*.51+i);
+                double z=-14.+31.*random()+.08*std::sin(time*.52+i);
+                double ex=m[0]*x+m[4]*y+m[8]*z+m[12]-.36;
+                double ey=m[1]*x+m[5]*y+m[9]*z+m[13]+.28;
+                double ez=-(m[2]*x+m[6]*y+m[10]*z+m[14]+.22);
+                if(ez<.18 || ez>9. || (ez<2.)!=(layer==1)) continue;
+                double radial=(ex*ex+ey*ey)/(ez*ez);
+                if(radial>.24) continue;
+                glColor4d(.65,.81,.85,(layer?.86:.62)*(1.-radial/.24)*(1.-ez/9.));
+                glVertex3d(x,y,z);
+            }
+            glEnd();
         }
-        glEnd();glDepthMask(GL_TRUE);glDisable(GL_BLEND);
+        glDepthMask(GL_TRUE);glDisable(GL_BLEND);
     }
     glEnable(GL_LIGHTING);glEnable(GL_LIGHT0);glEnable(GL_COLOR_MATERIAL);
     glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();

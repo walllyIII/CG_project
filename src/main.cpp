@@ -15,17 +15,17 @@ void drawGraybox(double time);
 
 namespace {
 constexpr double rad=3.141592653589793/180;
-struct Camera {double x=0,y=3.25,z=12,yaw=-12,pitch=-19;};
-constexpr Camera views[]={{}, {-1.35,2.45,2.5,12,-9}, {2.15,3.45,-5.65,-22,-20},{1.3101,3.4835,-7.5140,30.1826,-29.5680},{0.4927,3.4423,-7.7811,-3.8180,-36.5875},{0.6520,3.3110,-7.7215,-0.6869,-9.4501}};
+struct Camera {double x=-1.5,y=2.8,z=10,yaw=29,pitch=34;};
+constexpr Camera views[]={{}, {-1.35,2.45,2.5,12,-9}, {2.15,3.45,-5.65,-22,-20},{1.3101,3.4835,-7.5140,30.1826,-29.5680},{0.4927,3.4423,-7.7811,-3.8180,-36.5875},{0.6520,3.3110,-7.7215,-0.6869,-9.4501},{-1.5,2.8,10,-12,-34},{-2.4,1.7,5.4,18,-24},{-1.8,2.35,-1.45,24,-22},{2.15,3.45,-5.65,32,43}};
 constexpr const char* names[]={"discovery","approach","inspection"};
 
 // Replay 120 seconds of camera travel on a fixed simulation clock. The same
 // poses drive the interactive bookmarks and the captured review frames.
 Camera routePose(double frame){
     struct Stop {double frame; int view;};
-    constexpr Stop stops[]={{0,0},{600,1},{800,2},{900,3},{1010,4},{1110,5},{1200,2}};
+    constexpr Stop stops[]={{0,0},{50,0},{170,6},{235,0},{320,6},{465,7},{600,1},{690,8},{780,2},{860,3},{925,4},{980,5},{1030,2},{1110,2},{1190,9},{1200,9}};
     int leg=0;
-    while(leg<5 && frame>stops[leg+1].frame) ++leg;
+    while(leg+2<int(sizeof(stops)/sizeof(stops[0])) && frame>stops[leg+1].frame) ++leg;
     const Stop from=stops[leg],to=stops[leg+1];
     double t=(frame-from.frame)/(to.frame-from.frame);
     t=t*t*(3-2*t);
@@ -74,6 +74,11 @@ void render(const Camera &c,int w,int h,const Effects& effects,double time){
     glMatrixMode(GL_MODELVIEW);glLoadIdentity();
     glRotated(-c.pitch,1,0,0);glRotated(c.yaw,0,1,0);glTranslated(-c.x,-c.y,-c.z);
     bindEffects(effects,time,c.x,c.y,c.z,c.yaw,c.pitch);
+    // A distant eye-space surface lets open water receive scattering even
+    // when the torch points above every piece of scene geometry.
+    glPushMatrix();glLoadIdentity();glTexCoord2f(-1,0);glBegin(GL_QUADS);
+    glVertex3d(-200,-80,-85);glVertex3d(200,-80,-85);glVertex3d(200,80,-85);glVertex3d(-200,80,-85);
+    glEnd();glPopMatrix();
     drawGraybox(time);
     finishDiveView(effects.lamp,time);
 }
@@ -121,7 +126,9 @@ int main(int argc,char** argv){
         {"plank-near",2,{true,false,true,true},4},
         {"plank-middle",2,{true,false,true,true},4},
         {"plank-far",2,{true,false,true,true},4},
-        {"gun-room-rope",3,{},4},{"gun-room-crate",4,{},4},{"gun-room-berth",5,{},4},{"gun-room-berth-later",5,{},6}
+        {"gun-room-rope",3,{},4},{"gun-room-crate",4,{},4},{"gun-room-berth",5,{},4},{"gun-room-berth-later",5,{},6},
+        {"open-water",0,{},5},{"chain",6,{},17},{"chain-ahead",7,{},46.5},
+        {"drift",8,{},69},{"current-a",2,{},103},{"current-b",2,{},105},{"turned-away",9,{},119}
     };
     constexpr int filmFrames=24*120;
     std::vector<char> filmPixels;
@@ -163,13 +170,14 @@ int main(int argc,char** argv){
             ok=std::cout.good() && glGetError()==GL_NO_ERROR;
             if(!ok || frame+1==filmFrames) break;
         }
-        if(route && frame%600==0){
-            int view=frame/600;
+        if(route && (frame==0 || frame==600 || frame==1030)){
+            int view=frame==0?0:(frame==600?1:2);
             std::string path=(std::filesystem::path(argv[2])/(std::string(names[view])+".ppm")).string();
             ok=capture(path.c_str(),width,height);
             std::cout<<"Route frame "<<frame<<" ("<<frame/10<<" s): "<<names[view]<<std::endl;
-            if(!ok || frame==1200) break;
+            if(!ok) break;
         }
+        if(route && frame==1200) break;
         glfwSwapBuffers(w);
         ++frame;
     }

@@ -1,22 +1,24 @@
 # Wrecklight
 
-A first-person night dive for CG 100433, Track 2. Start with a hand torch above a half-buried anchor. Follow the chain past lost cargo, find the skull and crossed bones on the hull, then shine the torch through the breach to inspect the cannon.
+A first-person night dive for CG 100433, Track 2. The dive starts in blue-black water. Lower the hand torch to find short runs of chain in rippled sand. Lift it again and the seabed drops out of view. As the diver follows the chain, the dark mass beside it resolves into a wreck.
 
-[Watch the current dive and gun-room inspection](docs/gun-room/dive.mp4) · [Compare the three views and the torch-off frame](docs/night-dive/review.png)
+[Watch the current two-minute dive](docs/black-water/dive.mp4) · [Open the four review frames](docs/black-water/review.png)
 
-The torch starts on. Move the mouse to sweep it over the wreck or press **F** to extinguish it. The light originates below and to the right of the diver's eyes. Its strength falls with distance, fades between 8 and 14 scene units, and is blocked by the wreck and cargo. Dim blue-green ambient light preserves a distant silhouette. Drifting silt and water backscatter reveal the beam in front of the diver.
-
-| View | What to look for |
+| Replay time | What to look for |
 | --- | --- |
-| Discovery | The light catches the anchor, a slatted crate, a barrel and loose timber. Explore either side of the chain. |
-| Approach | Sweep from the spilled cannonballs up to the raised skull and crossed bones. The damaged stern gallery and torn pennant change the ship's silhouette. |
-| Inspection | Turn across the breach. Broken boards throw shadows onto the deck and barrel. Rust patches, wood grooves and sand ripples respond differently as the beam moves. |
+| 0:00–0:32 | The camera first faces open water, dips to the chain, lifts back into the water and lowers again. The torch remains on throughout. Silt crosses the beam at different apparent speeds and sizes with distance. |
+| 0:46–1:09 | Exposed links disappear under ripple crests and reappear farther ahead. A bank of sediment rises over the lower hull. A spar driven into the slope catches a barrel below the gunport, with the caps of several cannonballs showing through the sand. |
+| 1:18–1:38 | The diver inspects the muzzle, rope, crushed locker and berth. |
+| 1:43–1:51 | The camera holds still. Watch the soaked strip flex in front of the cannon and its shadow move across the gun. Silt continues drifting sideways. |
+| 1:51–2:00 | The torch sweeps away from the muzzle into open water. |
+
+The torch starts on. Move the mouse to sweep it, and press **F** to switch it off. Light comes from the diver's right hand, fades across 5.5 to 11 scene units and casts a moving shadow. Water scattering is visible when the torch points beyond the seabed. The sand ridges and drifts are geometry shared by the visible scene and the torch shadow pass.
 
 ## Inside the broken gunport
 
 Press **3** for the muzzle. Press **4** to look along the barrel at the frayed breeching rope, its barnacled ring and the overturned shot rack. The loose shot collects on the lower, far side of the deck. Press **5** for the crushed locker. A fallen beam pins the lid over a tin cup and ceramic shards. Sweep the torch over the slanted silver coins caught in the seams. Press **6** to look up at the torn hammock and unlit lantern. The canvas and lantern move slowly around their supports, and the torch shadows follow them.
 
-All four viewpoints stay on the water side of the broken hull. The final forty seconds of the replay visit the three details and return to the muzzle. [See the four inspection frames](docs/gun-room/review.png).
+All four viewpoints stay on the water side of the broken hull. The later part of the replay visits these details before holding at the muzzle. [See the four inspection frames](docs/gun-room/review.png).
 
 ## Rendering plan
 
@@ -58,7 +60,7 @@ Press **1**, **2** or **3** to return to the discovery, approach or inspection c
 ./build/wrecklight.exe --route build/route
 ```
 
-The replay renders 1,201 frames along the exterior route using a fixed simulation clock of 10 steps per second. It writes three PPM files at simulated times 0, 60 and 120 seconds. The PNGs below were converted from those framebuffers at their original 1280 x 720 resolution. Replay runs as fast as the renderer allows.
+The replay renders 1,201 frames along the exterior route using a fixed simulation clock of 10 steps per second. It writes three PPM files at simulated times 0, 60 and 103 seconds. The PNGs below were converted from those framebuffers at their original 1280 x 720 resolution. Replay runs as fast as the renderer allows.
 
 ### Original graybox team review
 
