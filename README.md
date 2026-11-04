@@ -2,7 +2,7 @@
 
 A first-person night dive for CG 100433, Track 2. The dive starts in blue-black water. Lower the hand torch to find short runs of chain in rippled sand. Lift it again and the seabed drops out of view. As the diver follows the chain, the dark mass beside it resolves into a wreck.
 
-[Watch the current two-minute dive](docs/seagrass-and-rock/dive.mp4) · [Open the four review frames](docs/black-water/review.png)
+[Watch the current two-minute dive](docs/living-water/dive.mp4) · [Open the four review frames](docs/black-water/review.png)
 
 | Replay time | What to look for |
 | --- | --- |
@@ -14,6 +14,8 @@ A first-person night dive for CG 100433, Track 2. The dive starts in blue-black 
 | 1:51–2:00 | The torch sweeps away from the muzzle into open water. |
 
 The torch starts on. Move the mouse to sweep it, and press **F** to switch it off. Light comes from the diver's right hand, fades across 5.5 to 11 scene units and casts a moving shadow. Water scattering is visible when the torch points beyond the seabed. The sand ridges and drifts are geometry shared by the visible scene and the torch shadow pass.
+
+For a motion-only check, [play the stationary-camera excerpts](docs/living-water/still-diver.mp4). They show the open water, grass patch and gunport at normal speed. The surge travels along the site. Suspended flecks drift through the beam, grass bends with a short delay from root to tip, and the caught strip, slack rope and hammock respond with different delays. The torn pennant folds at its loose edge. Near the seabed, short-lived silt veils lift from ripple crests and spread sideways. Small bubbles rise intermittently at the gunport. The torch picks up changes in water density even when aimed past the seabed.
 
 Press **0** to stop beside the near seagrass patch. The roots stay buried while each folded blade bends and twists toward the current. A moving torch shadow follows the leaf tip across the stones. The larger rocks have worn ledges, hollows and a sandy lower edge. The replay holds this view from 0:56.6 to 0:59.6, then moves sideways past the same patch. [Compare the two angles](docs/seagrass-and-rock/review.png).
 

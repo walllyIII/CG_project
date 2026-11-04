@@ -1,6 +1,7 @@
 #include <GLFW/glfw3.h>
 #include <cmath>
 #include <algorithm>
+#include "current.h"
 #include <initializer_list>
 
 namespace {
@@ -341,6 +342,13 @@ void gunRoom(double time){
     // Three twisted hemp strands pass through the ring and slacken onto the deck.
     Point knots[]={{2.18,2.35,-1.72},{2.12,2.55,-1.58},{2.05,2.43,-1.43},
                    {2.04,1.95,-1.19},{1.91,1.80,-.87},{2.18,1.80,-.49},{2.43,1.80,-.61}};
+    // The ring stays fixed; deck friction dampens the slack hemp and the
+    // frayed end lifts a moment after the exposed ribbon.
+    double pull=currentSurge(1.8,-10.1,time-.64);
+    knots[3].x+=.065*pull;
+    knots[5].x+=.08*pull;
+    knots[6].x+=.14*pull;
+    knots[6].y+=.085*(1.+pull);
     glTexCoord2f(.81f,0);
     for(int strand=0;strand<3;++strand){
         glColor3d(.33+.047*strand,.21+.034*strand,.106+.021*strand);
@@ -352,7 +360,7 @@ void gunRoom(double time){
         }
         for(int k=0;k<3;++k){
             double t=strand*.65+k*.41;
-            spar(prev,prev+Point{.13+.07*std::cos(t),.025*std::sin(4*t),.12*std::sin(2*t)},.010,.002,true,5);
+            spar(prev,prev+Point{.13+.07*std::cos(t),.025*std::sin(4*t)+.032*pull,.12*std::sin(2*t)+.035*std::sin(time*1.2+t)},.010,.002,true,5);
         }
     }
     glTexCoord2f(.56f,0);glColor3f(.23f,.11f,.049f);
@@ -404,9 +412,9 @@ void gunRoom(double time){
     // The soaked strip stays caught on a splinter. Its free end crosses
     // the light path just in front of the gun, including in the depth pass.
     auto strip=[&](int j,double side){
-        double t=j/15.,wave=std::sin(.96*time-4.6*t);
-        return Point{.03+1.03*t+side*.018,2.94-.36*t+.19*t*wave+side*(.078-.053*t),
-                     2.15-.41*t+.16*t*std::sin(.77*time-3.*t)+side*.027};
+        double t=j/15.,wave=currentSurge(.4,-8.1,time-.88*t);
+        return Point{.03+1.03*t+side*.018,2.94-.36*t+.27*t*wave+side*(.078-.053*t),
+                     2.15-.41*t+.22*t*wave+.044*t*std::sin(1.7*time-4.*t)+side*.027};
     };
     for(int i=0;i<15;++i){
         double tornEdge=(i==9 || i==12)?.23:1.;
@@ -428,7 +436,7 @@ void gunRoom(double time){
         auto cloth=[&](int j,double side){
             double t=j/19.,sag=std::sin(pi*t);
             return Point{-2.31+3.16*t,3.78-.67*sag+.115*side*side*sag,
-                         -1.24+sag*(.36*side+.064*std::sin(.73*time))};
+                         -1.24+sag*(.36*side+.115*currentSurge(.4,-10.,time-1.35))};
         };
         if(i==0 || i==18) continue;
         face({cloth(i,-1),cloth(i+1,-1),cloth(i+1,0),cloth(i,0)});
@@ -436,7 +444,7 @@ void gunRoom(double time){
     }
     glColor3f(.18f,.09f,.041f);timber({-.55,3.91,-1.26},3.72,.18,.18);
     for(double x:{-2.10,.65}) spar({x,3.90,-1.24},{x,3.63,-1.24},.021,.021);
-    glPushMatrix();glTranslated(-.48,3.81,-1.09);glRotated(4.*std::sin(.87*time),0,0,1);
+    glPushMatrix();glTranslated(-.48,3.81,-1.09);glRotated(5.*currentSurge(.4,-10.,time-1.9),0,0,1);
     glTexCoord2f(.54f,.7f);glColor3f(.33f,.24f,.12f);
     hoops({0,-.095,0},.076,.105,.015);
     spar({0,-.22,0},{0,-.26,0},.074,.13);
@@ -481,11 +489,14 @@ void wreckFittings(){
     for(int k=0;k<3;++k){
         spar({-6.8+k*.28,4.25,1.25},{-4.4+k*.08,7.8,0},.025,.025);
     }
+}
+void tornPennant(double time){
     // Torn pennant folds through depth; the loose edge splits into streamers.
     glTexCoord2f(.85f,0);glColor3f(.16f,.04f,.035f);
     for(int i=0;i<11;++i){
-        double x=-4.36+i*.19,y=8.14-i*.055,z=.22*std::sin(i*.8);
-        double zn=.22*std::sin((i+1)*.8),drop=.70-.045*i;
+        auto fold=[&](int j){return j/11.*(.30*currentSurge(-3,-11,time-.16*j)+.17*std::sin(1.55*time-.65*j));};
+        double x=-4.36+i*.19,y=8.14-i*.055,z=fold(i);
+        double zn=fold(i+1),drop=.70-.045*i;
         face({{x,y,z},{x+.19,y-.055,zn},{x+.19,y-.055-drop,zn},{x,y-drop,z}});
         if(i>=8) face({{x,y-drop,z},{x+.41,y-drop-.26,zn+.08},{x+.15,y-drop+.02,zn}});
     }
@@ -599,10 +610,10 @@ void grassBlade(Point root,double angle,double height,double width,double phase,
     // thin edges and both faces participate in the torch depth pass.
     Point rings[12][6];
     for(int j=0;j<12;++j){
-        double t=j/11.,flow=std::sin(time*.79+phase-2.4*t);
+        double t=j/11.,flow=currentSurge(root.x,root.z,time-.72*t)+.16*std::sin(1.42*time+phase-3.*t);
         double a=angle+.85*t+.32*t*flow;
         double reach=height*(.07*t+(.56+.20*std::sin(phase))*t*t);
-        Point axis=root+Point{reach*std::cos(angle)+height*t*t*(.17+.18*flow),
+        Point axis=root+Point{reach*std::cos(angle)+height*t*t*(.20+.39*flow),
             height*(t-(.29+.12*std::cos(phase))*t*t*t),reach*std::sin(angle)+.04*t*t*std::cos(time*.53+phase)};
         double span=width*(.38+.64*std::sin(pi*std::pow(t,.77)))*(1.-.85*std::pow(t,4));
         double notch=(j==8 && std::sin(phase)>.2)?.47:1.;
@@ -644,6 +655,7 @@ void seagrass(double time){
     }
 }
 }
+double seabedHeight(double x,double z){return bed(x,z);}
 void staticWreck(){
     // More samples near the dive path resolve small sand ridges in silhouette
     // and in the torch shadow map. Outer strips share the same boundary vertices.
@@ -682,7 +694,7 @@ void drawGraybox(double time){
     glCallList(fixedScene);
     seagrass(time);
     glPushMatrix();glTranslated(.6,-.48,-9.6);glRotated(-18,0,1,0);glRotated(-12,1,0,0);
-    gunRoom(time);glPopMatrix();
+    gunRoom(time);tornPennant(time);glPopMatrix();
 }
 
 // First-person equipment uses eye coordinates. Its barrel points away from

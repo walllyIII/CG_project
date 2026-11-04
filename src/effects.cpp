@@ -1,4 +1,5 @@
 #include "effects.h"
+#include "current.h"
 #include "shader.h"
 #include "target.h"
 #ifdef __APPLE__
@@ -11,6 +12,7 @@
 #include <vector>
 
 void drawGraybox(double time);
+double seabedHeight(double x,double z);
 namespace {
 GLuint program=0, pattern=0;
 Target shadow,torch;
@@ -85,9 +87,12 @@ vec3 waterScatter(vec3 endpoint){
     for(int i=0;i<10;i++){
         float t=(float(i)+.5)*reach/10.;
         vec3 q=dir*t-vec3(.36,-.28,-.22);
-        scatter+=smoothstep(.84,.988,-normalize(q).z)*exp(-.38*t)*reach/10.;
+        vec3 p=(gl_TextureMatrix[0]*vec4(dir*t,1.)).xyz;
+        float density=.91+.30*sin(.83*clockTime-.52*p.x-.19*p.z)
+                          +.17*sin(p.y*2.3+.58*p.z-.61*clockTime);
+        scatter+=density*smoothstep(.84,.988,-normalize(q).z)*exp(-.38*t)*reach/10.;
     }
-    return scatter*vec3(.0019,.0048,.0074);
+    return scatter*vec3(.0023,.0057,.0088);
 }
 void main(){
     if(surface.x<0.){
@@ -244,6 +249,65 @@ void bindEffects(const Effects& e,double time,double x,double y,double z,double 
     setFloat(clockLocation,static_cast<float>(time));
 }
 void drawHandLight(bool on);
+namespace {
+struct EyePoint { double x,y,z; };
+EyePoint projectWaterPoint(const GLdouble* m,double x,double y,double z){
+    return {m[0]*x+m[4]*y+m[8]*z+m[12],m[1]*x+m[5]*y+m[9]*z+m[13],
+            m[2]*x+m[6]*y+m[10]*z+m[14]};
+}
+double beamWeight(EyePoint p){
+    double depth=-(p.z+.22);
+    if(depth<.18 || depth>10.)return 0.;
+    double radius=std::hypot(p.x-.36,p.y+.28)/depth;
+    return std::clamp(1.-radius/.49,0.,1.)*(1.-depth/11.);
+}
+void waterTraces(const GLdouble* m,double time){
+    constexpr double tau=6.283185307179586;
+    glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();
+    // A surge lifts a brief, translucent veil off ripple crests at three
+    // points along the route. The depth buffer occludes it behind solid objects.
+    const double sources[][2]={{-2.14,4.3},{-3.15,-3.25},{.40,-5.7}};
+    for(int s=0;s<3;++s)for(int j=0;j<20;++j){
+        double age=std::fmod(time+j*.29+s*1.7,7.2);
+        if(age>4.1)continue;
+        double x=sources[s][0]+.28*std::sin(j*2.4)+age*.26;
+        double z=sources[s][1]+.32*std::cos(j*2.7)+.12*std::sin(age+j);
+        double y=seabedHeight(x,z)+.055+age*.096;
+        EyePoint p=projectWaterPoint(m,x,y,z);
+        double glow=beamWeight(p)*std::sin(age/4.1*3.14159)*(.5+.5*currentSurge(x,z,time-age));
+        if(glow<.002)continue;
+        glBegin(GL_TRIANGLE_FAN);glColor4d(.50,.57,.52,.116*glow);
+        glVertex3d(p.x,p.y,p.z);glColor4d(.45,.54,.51,0);
+        for(int k=0;k<=12;++k){
+            double t=k*tau/12,rad=.108+.102*age;
+            glVertex3d(p.x+rad*std::cos(t),p.y+rad*.54*std::sin(t),p.z);
+        }
+        glEnd();
+    }
+    // Small intermittent releases of trapped air: dark transparent centers
+    // and a short glancing reflection instead of a bright outlined circle.
+    for(int j=0;j<8;++j){
+        double age=std::fmod(time+8.-j*.185,8.);
+        if(age>4.3) continue;
+        double x=.66+.10*age+.052*std::sin(age*4.+j);
+        double z=-8.12+.07*std::sin(age*2.7+j);
+        EyePoint p=projectWaterPoint(m,x,2.13+age*(.53+.024*(j%3)),z);
+        double light=beamWeight(p)*std::min(1.,age*7.)*std::min(1.,(4.3-age)*3.);
+        if(light<.006)continue;
+        double r=(.019+.004*(j%4))*(1.+.08*age);
+        glBegin(GL_TRIANGLE_STRIP);
+        for(int k=0;k<=24;++k){
+            double t=tau*k/24.,glint=std::pow(.5+.5*std::cos(t-.91),10.);
+            glColor4d(.73,.88,.95,light*(.08+.88*glint));
+            glVertex3d(p.x+r*std::cos(t),p.y+r*.89*std::sin(t),p.z);
+            glColor4d(.38,.52,.57,0.);
+            glVertex3d(p.x+r*.72*std::cos(t),p.y+r*.65*std::sin(t),p.z);
+        }
+        glEnd();
+    }
+    glPopMatrix();
+}
+}
 void finishDiveView(bool on,double time){
     shader::bind(0);
     glPushAttrib(GL_ENABLE_BIT|GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_POINT_BIT|GL_LIGHTING_BIT);
@@ -258,9 +322,10 @@ void finishDiveView(bool on,double time){
             unsigned state=317u;
             auto random=[&](){state=1664525u*state+1013904223u;return (state>>8)/16777216.;};
             for(int i=0;i<13000;++i){
-                double x=-13.+std::fmod(26.*random()+time*.17,26.);
+                double x=-13.+std::fmod(26.*random()+time*.24,26.);
                 double y=.08+9.*random()+.09*std::cos(time*.51+i);
-                double z=-14.+31.*random()+.08*std::sin(time*.52+i);
+                double z=-14.+31.*random()+.12*std::sin(time*.52+i);
+                x+=.26*currentSurge(x,z,time);
                 double ex=m[0]*x+m[4]*y+m[8]*z+m[12]-.36;
                 double ey=m[1]*x+m[5]*y+m[9]*z+m[13]+.28;
                 double ez=-(m[2]*x+m[6]*y+m[10]*z+m[14]+.22);
@@ -272,6 +337,7 @@ void finishDiveView(bool on,double time){
             }
             glEnd();
         }
+        waterTraces(m,time);
         glDepthMask(GL_TRUE);glDisable(GL_BLEND);
     }
     glEnable(GL_LIGHTING);glEnable(GL_LIGHT0);glEnable(GL_COLOR_MATERIAL);
