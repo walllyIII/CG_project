@@ -12,6 +12,7 @@
 #include <vector>
 
 void drawGraybox(double time);
+void drawShoal();
 double seabedHeight(double x,double z);
 namespace {
 GLuint program=0, pattern=0;
@@ -109,7 +110,9 @@ void main(){
     // have different spatial frequencies. A patchy oxide layer covers the iron.
     float pits=valueNoise(world*8.5), fine=valueNoise(world*35.);
     float relief;
-    if(surface.z>2.5){
+    if(surface.z>3.5){
+        relief=0.;
+    }else if(surface.z>2.5){
         float film=.7*pits+.3*fine;
         base*=.75+.36*film+.14*surface.w;
         rough=.54-.17*surface.w+.08*pits;
@@ -171,12 +174,18 @@ void main(){
     if(lamp && beam>0. && range<14. && ray.z<-.15){
         vec3 L=normalize(mat3(gl_TextureMatrix[0])*((-ray)*mat3(gl_TextureMatrix[2])));
         float power=31.*beam*(1.-smoothstep(5.5,11.,range))/(1.+.30*range*range);
-        color+=vec3(.90,.97,1.)*power*torchVisibility(ray)*brdf(N,V,L,base,rough,metal);
+        float light=power*torchVisibility(ray);
+        vec3 response=brdf(N,V,L,base,rough,metal);
+        if(surface.z>4.5){
+            float rim=smoothstep(.16,.95,surface.w);
+            response=.30*response+rim*vec3(.065,.13,.145)*(.55+.45*(1.-abs(dot(N,V))));
+        }
+        color+=vec3(.90,.97,1.)*light*response;
     }
     if(water) color=mix(waterColor,color,exp(-dist*vec3(.172,.090,.063)));
     color+=waterScatter(eye);
     color=color/(1.+color);
-    gl_FragColor=vec4(pow(clamp(color,0.,1.),vec3(1./2.2)),1.);
+    gl_FragColor=vec4(pow(clamp(color,0.,1.),vec3(1./2.2)),material.a);
 })";
 
 void lightMatrix(){
@@ -240,7 +249,7 @@ void bindEffects(const Effects& e,double time,double x,double y,double z,double 
         glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();
         eyeToTorch(pose);glRotated(-pitch,1,0,0);glRotated(yaw,0,1,0);glTranslated(-x,-y,-z);
         glEnable(GL_POLYGON_OFFSET_FILL);glPolygonOffset(2.5f,3.f);
-        drawGraybox(time);glDisable(GL_POLYGON_OFFSET_FILL);glPopMatrix();glMatrixMode(GL_PROJECTION);glPopMatrix();
+        drawGraybox(time);drawShoal();glDisable(GL_POLYGON_OFFSET_FILL);glPopMatrix();glMatrixMode(GL_PROJECTION);glPopMatrix();
         bindScreen(viewport[2],viewport[3]);shader::bind(program);
     }
     activeTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,torch.depth);

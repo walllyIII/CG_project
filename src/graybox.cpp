@@ -1,9 +1,12 @@
+#include "shoal.h"
 #include <GLFW/glfw3.h>
 #include <cmath>
 #include <algorithm>
 #include "current.h"
 #include "effects.h"
 #include <initializer_list>
+#include <map>
+#include <vector>
 
 namespace {
 constexpr double pi=3.141592653589793;
@@ -13,7 +16,42 @@ Point operator-(Point a,Point b){return {a.x-b.x,a.y-b.y,a.z-b.z};}
 Point operator*(Point a,double k){return {a.x*k,a.y*k,a.z*k};}
 Point cross(Point a,Point b){return {a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x};}
 Point unit(Point a){return a*(1/std::sqrt(a.x*a.x+a.y*a.y+a.z*a.z));}
+// Index solid faces once in world space, including the torn gunport edges.
+struct Triangle { Point a,b,c,normal; };
+std::map<std::pair<int,int>,std::vector<Triangle>> solids;
+bool indexing=false;
+double dot(Point a,Point b){return a.x*b.x+a.y*b.y+a.z*b.z;}
+void indexFace(std::initializer_list<Point> pts){
+    GLdouble m[16]; glGetDoublev(GL_MODELVIEW_MATRIX,m);
+    auto world=[&](Point p){return Point{
+        m[0]*p.x+m[4]*p.y+m[8]*p.z+m[12],m[1]*p.x+m[5]*p.y+m[9]*p.z+m[13],
+        m[2]*p.x+m[6]*p.y+m[10]*p.z+m[14]};};
+    Point a=world(*pts.begin()), b=world(pts.begin()[1]);
+    for(auto it=pts.begin()+2;it!=pts.end();++it){
+        Point c=world(*it), n=cross(b-a,c-a);
+        if(dot(n,n)>1e-14){
+            Triangle tri{a,b,c,unit(n)};
+            for(int x=int(std::floor(std::min({a.x,b.x,c.x})));x<=std::floor(std::max({a.x,b.x,c.x}));++x)
+                for(int z=int(std::floor(std::min({a.z,b.z,c.z})));z<=std::floor(std::max({a.z,b.z,c.z}));++z)
+                    solids[{x,z}].push_back(tri);
+        }
+        b=c;
+    }
+}
+Point closestPoint(Point p,const Triangle& t){
+    Point projected=p-t.normal*dot(p-t.a,t.normal);
+    Point vertices[]={t.a,t.b,t.c,t.a}, nearest=t.a;
+    bool inside=true;
+    for(int i=0;i<3;++i){
+        Point start=vertices[i], edge=vertices[i+1]-start;
+        if(dot(cross(edge,projected-start),t.normal)<0) inside=false;
+        Point q=start+edge*std::clamp(dot(projected-start,edge)/dot(edge,edge),0.,1.);
+        if(dot(q-p,q-p)<dot(nearest-p,nearest-p)) nearest=q;
+    }
+    return inside?projected:nearest;
+}
 void face(std::initializer_list<Point> pts){
+    if(indexing){indexFace(pts);return;}
     const Point* p=pts.begin();
     Point n=unit(cross(p[1]-p[0],p[2]-p[0]));
     glBegin(GL_POLYGON); glNormal3d(n.x,n.y,n.z);
@@ -525,12 +563,12 @@ void barrel(double x,double z,double yaw,double scale){
 }
 void spill(){
     // The long spar arrests a barrel downslope of the breach.
-    barrel(.28,-5.40,75,1.02);barrel(-1.0,-6.58,-36,.84);
+    barrel(-.64,-5.61,75,1.02);barrel(-1.82,-6.75,-36,.84);
     glTexCoord2f(.62f,0);glColor3f(.22f,.115f,.046f);
-    spar({-2.28,bed(-2.28,-5.65)-.32,-5.65},{1.82,bed(1.82,-4.81)+.74,-4.81},.23,.15);
+    spar({-3.37,bed(-3.37,-5.60)-.09,-5.60},{.20,bed(.20,-4.64)+.28,-4.64},.23,.15);
     // Cargo crates of different sizes, with individual slats and inset seams.
     for(int i=0;i<2;++i){
-        const double xs[]={1.25,-1.88},zs[]={-5.86,-6.25};
+        const double xs[]={2.18,-3.27},zs[]={-6.15,-6.78};
         double x=xs[i],z=zs[i];
         glPushMatrix();glTranslated(x,bed(x,z)+.31,z);glRotated(22+i*29,0,1,0);glRotated(i*4,0,0,1);
         glTexCoord2f(.59f,0);
@@ -546,11 +584,14 @@ void spill(){
         glPushMatrix();glRotated(29,0,0,1);timber({0,0,.409},1.10,.095,.08);glPopMatrix();
         glPopMatrix();
     }
-    for(int j=0;j<15;++j){
-        double x=.32+1.85*std::sin(j*7.31),z=-5.64+.93*std::cos(j*2.32);
-        glPushMatrix();glTranslated(x,bed(x,z)+.025,z);glRotated(j*97.,0,1,0);glRotated(4.*std::sin(j),0,0,1);
-        glTexCoord2f(.57f,0);glColor3d(.19+.025*(j%4),.092,.044);
-        timber({0,0,0},.46+.29*(j%6),.09,.12+.025*(j%5));glPopMatrix();
+    // Fallen boards occupy separate pockets of sand on either side of the chain.
+    struct Offcut { double x,z,yaw,length; };
+    constexpr Offcut offcuts[]={{-2.82,-4.78,14,1.02},{-1.49,-4.17,-24,.88},
+        {-.48,-3.85,31,.62},{2.48,-5.03,52,.66},{2.82,-4.12,-8,.87}};
+    for(const auto& board:offcuts){
+        glPushMatrix();glTranslated(board.x,bed(board.x,board.z)+.025,board.z);
+        glRotated(board.yaw,0,1,0);glTexCoord2f(.57f,0);glColor3d(.215,.092,.044);
+        timber({0,0,0},board.length,.09,.15);glPopMatrix();
     }
     glTexCoord2f(.43f,.91f);glColor3f(.21f,.19f,.17f);
     for(int j=0;j<9;++j){
@@ -657,6 +698,35 @@ void seagrass(double time){
 }
 }
 double seabedHeight(double x,double z){return bed(x,z);}
+static void drawSolids(){
+    glPushMatrix();glTranslated(.6,-.48,-9.6);glRotated(-18,0,1,0);glRotated(-12,1,0,0);
+    hull();wreckFittings();cannon();glPopMatrix();
+    spill();
+}
+// Query a sphere against the seabed and nearby faces. The largest overlap
+// supplies a separating direction, so an oblique approach slides along wood.
+double diveOverlap(double x,double y,double z,double radius,double& nx,double& ny,double& nz){
+    Point p{x,y,z}, normal{0,1,0};
+    double depth=std::max(0.,bed(x,z)+radius-y);
+    for(int ix=int(std::floor(x-radius));ix<=std::floor(x+radius);++ix){
+        for(int iz=int(std::floor(z-radius));iz<=std::floor(z+radius);++iz){
+            auto cell=solids.find({ix,iz});
+            if(cell==solids.end()) continue;
+            for(const Triangle& t:cell->second){
+                if(std::abs(dot(p-t.a,t.normal))>=radius) continue;
+                Point delta=p-closestPoint(p,t);
+                double d=std::sqrt(dot(delta,delta));
+                if(radius-d>depth){depth=radius-d;normal=d>1e-9?delta*(1/d):t.normal;}
+            }
+        }
+    }
+    nx=normal.x;ny=normal.y;nz=normal.z;return depth;
+}
+void initDiveCollision(){
+    glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();
+    indexing=true;drawSolids();indexing=false;
+    glPopMatrix();
+}
 void staticWreck(){
     // More samples near the dive path resolve small sand ridges in silhouette
     // and in the torch shadow map. Outer strips share the same boundary vertices.
@@ -671,9 +741,8 @@ void staticWreck(){
         }
         glEnd();z=nextZ;
     }
-    glPushMatrix();glTranslated(.6,-.48,-9.6);glRotated(-18,0,1,0);glRotated(-12,1,0,0);
-    hull();wreckFittings();cannon();glPopMatrix();
-    anchor();seabedStones();spill();
+    drawSolids();
+    anchor();seabedStones();
     glTexCoord2f(.60f,.55f);glColor3f(.32f,.33f,.33f);
     for(int i=-10;i<32;++i){
         double z=3.65-i*.34, x=-2.12+i*.105;
@@ -696,6 +765,114 @@ void drawGraybox(double time){
     seagrass(time);
     glPushMatrix();glTranslated(.6,-.48,-9.6);glRotated(-18,0,1,0);glRotated(-12,1,0,0);
     gunRoom(time);tornPennant(time);glPopMatrix();
+}
+
+// A loose school circles the open water between the chain and the breach.
+void drawShoal(){
+    glTexCoord4f(.35f,.23f,4,0);
+    for(int i=0;i<7;++i){
+        const auto& fish=wildlife::shoal[i];
+        glPushMatrix();glTranslated(fish.position.x,fish.position.y,fish.position.z);
+        glRotated(fish.heading*180/pi,0,1,0);
+        double scale=.84+.08*(i%4);
+        glScaled(scale,scale,scale);
+        // Taper the flank from a rounded snout to a narrow tail joint.
+        constexpr double spine[]={.17,.105,-.025,-.13,-.20};
+        constexpr double height[]={.008,.060,.073,.047,.013};
+        auto skin=[&](int row,int j){
+            double a=j*2*pi/12;
+            return Point{spine[row],height[row]*std::cos(a),height[row]*.61*std::sin(a)};
+        };
+        for(int j=0;j<12;++j){
+            double shade=.5+.5*std::cos((j+.5)*2*pi/12);
+            glColor3d(.49-.40*shade,.58-.38*shade,.60-.34*shade);
+            for(int row=0;row<4;++row)
+                face({skin(row,j),skin(row+1,j),skin(row+1,j+1),skin(row,j+1)});
+        }
+        glColor3f(.19f,.32f,.34f);
+        face({{.012,.067,0},{-.08,.117,0},{-.105,.049,0}});
+        for(int side:{-1,1}){
+            glColor3f(.025f,.031f,.035f);
+            face({{.091,.032,side*.037},{.114,.027,side*.036},{.102,.016,side*.039}});
+        }
+        glTranslated(-.193,0,0);glRotated(24*std::sin(fish.tail),0,1,0);
+        glColor3f(.23f,.39f,.40f);
+        for(int side:{-1,1})face({{.01,side*.008,0},{-.106,side*.067,0},{-.068,0,.009}});
+        glPopMatrix();
+    }
+}
+
+namespace {
+struct JellyMotion { Point origin; double period, phase, bearing; };
+constexpr JellyMotion jellies[]={
+    {{-.74,2.29,-.53},3.15,.4,.38}, {{1.14,2.55,-2.05},4.35,2.7,2.25},
+    {{-2.42,1.72,-3.58},3.72,4.6,-1.17}
+};
+double bellPulse(const JellyMotion& jelly,double time){
+    double cycle=2*pi*time/jelly.period+jelly.phase;
+    return std::sin(cycle+.29*std::sin(cycle));
+}
+Point jellyCenter(const JellyMotion& jelly,double time){
+    Point p=jelly.origin;
+    double phase=.29*time+jelly.phase;
+    double drift=.26*std::sin(phase)+.095*bellPulse(jelly,time);
+    p.x+=.09*currentSurge(p.x,p.z,time)+std::cos(jelly.bearing)*drift;
+    p.z+=std::sin(jelly.bearing)*drift+.055*std::cos(phase);
+    p.y+=.09*std::sin(.51*time+jelly.phase)-.051*bellPulse(jelly,time);
+    return p;
+}
+}
+void drawJellies(double time){
+    Point centers[3];
+    GLdouble view[16];glGetDoublev(GL_MODELVIEW_MATRIX,view);
+    int order[]={0,1,2};
+    for(int i:order) centers[i]=jellyCenter(jellies[i],time);
+    auto depth=[&](Point p){return view[2]*p.x+view[6]*p.y+view[10]*p.z;};
+    std::sort(order,order+3,[&](int a,int b){return depth(centers[a])<depth(centers[b]);});
+    glEnable(GL_BLEND);glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);glDepthMask(GL_FALSE);
+    glTexCoord4f(.40f,.07f,4,0);
+    for(int i:order){
+        Point p=centers[i];
+        glPushMatrix();glTranslated(p.x,p.y,p.z);
+        const JellyMotion& jelly=jellies[i];
+        double pulse=bellPulse(jelly,time),radius=(.177+.019*i)*(1.+.10*pulse);
+        // Sample earlier bell positions down the strand. The attachment follows
+        // the current pulse while the tip still trails the previous stroke.
+        Point trail[6];double rings[6];
+        for(int j=0;j<=5;++j){
+            double u=j/5.,past=time-.23*jelly.period*u;
+            trail[j]=(jellyCenter(jelly,past)-p)*.68;
+            trail[j].x+=.085*u*currentSurge(p.x,p.z,past);
+            rings[j]=(.177+.019*i)*(1.+.10*bellPulse(jelly,past))*.89;
+        }
+        glTexCoord4f(.62f,.04f,4,0);
+        for(int k=0;k<7;++k){
+            double a=k*2*pi/7;
+            Point prev{rings[0]*std::cos(a),0,rings[0]*std::sin(a)};
+            glColor4f(.29f,.45f,.46f,.43f);
+            for(int j=1;j<=5;++j){
+                double u=j/5.;
+                Point next=trail[j]+Point{rings[j]*std::cos(a),
+                    -u*(.23+.09*std::sin(k*2.+i)),rings[j]*std::sin(a)+u*.026*std::sin(time+a-2*u)};
+                spar(prev,next,.007-.004*(u-.2),.007-.004*u,false,4);prev=next;
+            }
+        }
+        // Smooth normals and a scalloped translucent lip catch a grazing torch.
+        for(int band=0;band<6;++band){
+            glBegin(GL_QUAD_STRIP);
+            for(int j=0;j<=32;++j)for(int ring:{band,band+1}){
+                double a=j*2*pi/32,b=.014+1.76*ring/6.,r=radius*std::sin(b);
+                double lip=ring==6?1.:0.;
+                glTexCoord4d(.66,.02,5,lip);
+                glColor4d(.24,.39,.43,.14+.39*lip);
+                glNormal3d(std::sin(b)*std::cos(a),std::cos(b),std::sin(b)*std::sin(a));
+                glVertex3d(r*std::cos(a),(.143-.018*pulse)*std::cos(b)+lip*.012*std::cos(8*a),r*std::sin(a));
+            }
+            glEnd();
+        }
+        glPopMatrix();
+    }
+    glDepthMask(GL_TRUE);glDisable(GL_BLEND);
 }
 
 // First-person equipment uses eye coordinates. Its barrel points away from

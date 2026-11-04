@@ -1,3 +1,4 @@
+#include "shoal.h"
 #include <GLFW/glfw3.h>
 #include "effects.h"
 #ifdef _WIN32
@@ -12,6 +13,10 @@
 #include <string>
 #include <vector>
 void drawGraybox(double time);
+void drawShoal();
+void drawJellies(double time);
+void initDiveCollision();
+double diveOverlap(double x,double y,double z,double radius,double& nx,double& ny,double& nz);
 
 namespace {
 constexpr double rad=3.141592653589793/180;
@@ -85,6 +90,50 @@ void look(GLFWwindow* w,double x,double y){
     }
     v.first=false;v.mx=x;v.my=y;
 }
+void swimStep(Camera& c,double dx,double dy,double dz){
+    if(dx==0 && dy==0 && dz==0) return;
+    const int steps=std::max(1,int(std::ceil(std::hypot(std::hypot(dx,dy),dz)/.065)));
+    for(int i=0;i<steps;++i){
+        double nx,ny,nz;
+        double overlap=diveOverlap(c.x,c.y,c.z,.35,nx,ny,nz);
+        auto advance=[&](double& coordinate,double amount){
+            if(amount==0) return;
+            double previous=coordinate;
+            coordinate+=amount;
+            double next=diveOverlap(c.x,c.y,c.z,.35,nx,ny,nz);
+            if(next>.0001 && next>=overlap) coordinate=previous;
+            else overlap=next;
+        };
+        advance(c.y,std::clamp(c.y+dy/steps,.4,18.)-c.y);
+        advance(c.x,dx/steps);
+        advance(c.z,dz/steps);
+    }
+}
+TorchPose clearTorch(const Camera& c,TorchPose pose){
+    // Cover the glove and lamp with overlapping spheres from grip to bezel.
+    const double pitch=c.pitch*rad, yaw=c.yaw*rad;
+    auto fits=[&](double tuck){
+        for(int i=0;i<4;++i){
+            double ex=pose.x-.23*tuck-.018*i;
+            double ey=pose.y+.19*tuck+.013*i;
+            double ez=pose.z+.49*tuck-.15*i;
+            double dy=std::cos(pitch)*ey-std::sin(pitch)*ez;
+            double dz=std::sin(pitch)*ey+std::cos(pitch)*ez;
+            double nx,ny,nz;
+            if(diveOverlap(c.x+std::cos(yaw)*ex-std::sin(yaw)*dz,c.y+dy,
+                           c.z+std::sin(yaw)*ex+std::cos(yaw)*dz,.15,nx,ny,nz)>0) return false;
+        }
+        return true;
+    };
+    if(fits(0)) return pose;
+    double low=0,high=1;
+    for(int i=0;i<7;++i){
+        double mid=(low+high)*.5;
+        if(fits(mid)) high=mid;else low=mid;
+    }
+    pose.x-=.23*high;pose.y+=.19*high;pose.z+=.49*high;
+    return pose;
+}
 void move(GLFWwindow* w,Camera &c,double dt){
     auto key=[&](int k){return glfwGetKey(w,k)==GLFW_PRESS;};
     if(key(GLFW_KEY_7)){c=views[10];return;}
@@ -98,9 +147,9 @@ void move(GLFWwindow* w,Camera &c,double dt){
     double yaw=c.yaw*rad;
     double f=key(GLFW_KEY_W)-key(GLFW_KEY_S), s=key(GLFW_KEY_D)-key(GLFW_KEY_A);
     double speed=3.2*dt/std::max(1.,std::hypot(f,s));
-    c.x+=(std::sin(yaw)*f+std::cos(yaw)*s)*speed;
-    c.z+=(-std::cos(yaw)*f+std::sin(yaw)*s)*speed;
-    c.y=std::clamp(c.y+(key(GLFW_KEY_SPACE)-key(GLFW_KEY_LEFT_CONTROL))*3.2*dt,.4,18.);
+    swimStep(c,(std::sin(yaw)*f+std::cos(yaw)*s)*speed,
+             (key(GLFW_KEY_SPACE)-key(GLFW_KEY_LEFT_CONTROL))*3.2*dt,
+             (-std::cos(yaw)*f+std::sin(yaw)*s)*speed);
 }
 void toggle(GLFWwindow* w,int key,int,int action,int){
     if(action!=GLFW_PRESS) return;
@@ -127,6 +176,8 @@ void render(const Camera &c,int w,int h,const Effects& effects,double time,const
     glVertex3d(-200,-80,-85);glVertex3d(200,-80,-85);glVertex3d(200,80,-85);glVertex3d(-200,80,-85);
     glEnd();glPopMatrix();
     drawGraybox(time);
+    drawShoal();
+    drawJellies(time);
     finishDiveView(effects.lamp,time,pose,bubbles);
 }
 // PPM keeps the framebuffer capture independent of image-library dependencies.
@@ -159,7 +210,9 @@ int main(int argc,char** argv){
     glfwMakeContextCurrent(w);glfwSwapInterval(route || film?0:1);
     std::cerr<<"OpenGL "<<glGetString(GL_VERSION)<<" / "<<glGetString(GL_RENDERER)<<'\n';
     if(!initEffects()){std::cerr<<"Underwater renderer initialization failed\n";glfwTerminate();return 1;}
+    initDiveCollision();
     DiverMotion diver;
+    double lastFishTime=-1;
     Viewer viewer;glfwSetWindowUserPointer(w,&viewer);
     glfwSetKeyCallback(w,toggle);
     if(!film && !snapshot && !route && !review){glfwSetInputMode(w,GLFW_CURSOR,GLFW_CURSOR_DISABLED);glfwSetCursorPosCallback(w,look);}
@@ -167,7 +220,7 @@ int main(int argc,char** argv){
     struct Comparison {const char* name; int view; Effects effects; double time;};
     const Comparison checks[]={
         {"far-water",0,{},4},{"far-clear",0,{false,true,true,true},4},
-        {"mid-lit",1,{},4},{"mid-no-caustics",1,{true,false,true,true},4},
+        {"mid-lit",1,{},4},{"mid-lamp-off",1,{true,true,true,false},4},{"mid-no-caustics",1,{true,false,true,true},4},
         {"mid-later",1,{},8},{"mid-no-shadows",1,{true,true,false,true},4},
         {"near-dark",2,{true,true,true,false},4},{"near-lamp",2,{true,true,true,true},4},
         {"near-oblique",2,{true,true,true,true},4},
@@ -176,7 +229,7 @@ int main(int argc,char** argv){
         {"plank-far",2,{true,false,true,true},4},
         {"gun-room-rope",3,{},4},{"gun-room-crate",4,{},4},{"gun-room-berth",5,{},4},{"gun-room-berth-later",5,{},6},
         {"open-water",0,{},5},{"chain",6,{},17},{"chain-ahead",7,{},46.5},
-        {"drift",8,{},69},{"current-a",2,{},103},{"current-b",2,{},105},{"turned-away",9,{},119},{"aged-front",10,{},72},{"aged-side",11,{},72},{"wheel-sand",12,{},84},{"muzzle-wear",13,{},81},{"grass-front",14,{},56.6},{"grass-side",15,{},56.6},{"grass-current",14,{},59.6}
+        {"drift",8,{},69},{"current-a",2,{},103},{"current-b",2,{},105},{"turned-away",9,{},119},{"aged-front",10,{},72},{"aged-side",11,{},72},{"wheel-sand",12,{},84},{"muzzle-wear",13,{},81},{"grass-front",14,{},56.6},{"grass-side",15,{},56.6},{"grass-current",14,{},59.6},{"cargo-clearance",8,{},69}
     };
     constexpr int filmFrames=24*120;
     std::vector<char> filmPixels;
@@ -187,6 +240,7 @@ int main(int argc,char** argv){
             viewer.camera=views[checks[frame].view];
             viewer.effects=checks[frame].effects;
             std::string shot=checks[frame].name;
+            if(shot=="cargo-clearance") viewer.camera={-.6,3.4,-2.0,0,-42};
             if(shot=="near-oblique") viewer.camera={1.45,3.30,-5.55,-12,-18};
             if(shot.rfind("plank-",0)==0){
                 double distance=shot=="plank-near"?3:(shot=="plank-middle"?10:22);
@@ -202,6 +256,19 @@ int main(int argc,char** argv){
         if(width<1 || height<1){glfwWaitEventsTimeout(.05);continue;}
         double time=review?checks[frame].time:((route || film)?tick*.1:(snapshot?0.:now));
         TorchPose pose=diver.update(viewer.camera,time,double(width)/height,review || snapshot);
+        pose=clearTorch(viewer.camera,pose);
+        const Camera& c=viewer.camera;
+        auto toWorld=[&](wildlife::Vec v){
+            double pitch=c.pitch*rad,yaw=c.yaw*rad;
+            double z=std::sin(pitch)*v.y+std::cos(pitch)*v.z;
+            return wildlife::Vec{std::cos(yaw)*v.x-std::sin(yaw)*z,
+                std::cos(pitch)*v.y-std::sin(pitch)*v.z,std::sin(yaw)*v.x+std::cos(yaw)*z};
+        };
+        wildlife::Vec eye{c.x,c.y,c.z};
+        auto lamp=eye+toWorld({pose.x,pose.y,pose.z});
+        auto beam=toWorld({0,std::sin(pose.pitch*rad),-std::cos(pose.pitch*rad)});
+        wildlife::update(time,(review || lastFishTime<0)?0:time-lastFishTime,eye,lamp,beam,viewer.effects.lamp);
+        lastFishTime=time;
         render(viewer.camera,width,height,viewer.effects,time,pose,diver.bubbles);
         if(review){
             auto path=std::filesystem::path(argv[2])/(std::string(checks[frame].name)+".ppm");
