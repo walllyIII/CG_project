@@ -2,17 +2,20 @@
 
 A first-person night dive for CG 100433, Track 2. The dive starts in blue-black water. Lower the hand torch to find short runs of chain in rippled sand. Lift it again and the seabed drops out of view. As the diver follows the chain, the dark mass beside it resolves into a wreck.
 
-[Watch the current two-minute dive](docs/black-water/dive.mp4) · [Open the four review frames](docs/black-water/review.png)
+[Watch the current two-minute dive](docs/weathered-wreck/dive.mp4) · [Open the four review frames](docs/black-water/review.png)
 
 | Replay time | What to look for |
 | --- | --- |
 | 0:00–0:32 | The camera first faces open water, dips to the chain, lifts back into the water and lowers again. The torch remains on throughout. Silt crosses the beam at different apparent speeds and sizes with distance. |
 | 0:46–1:09 | Exposed links disappear under ripple crests and reappear farther ahead. A bank of sediment rises over the lower hull. A spar driven into the slope catches a barrel below the gunport, with the caps of several cannonballs showing through the sand. |
-| 1:18–1:38 | The diver inspects the muzzle, rope, crushed locker and berth. |
+| 1:11–1:15 | The torch moves across the three weathered planks and the camera shifts sideways to expose the rib behind the damaged fastening. |
+| 1:19–1:38 | The diver inspects the muzzle, rope, crushed locker and berth. |
 | 1:43–1:51 | The camera holds still. Watch the soaked strip flex in front of the cannon and its shadow move across the gun. Silt continues drifting sideways. |
 | 1:51–2:00 | The torch sweeps away from the muzzle into open water. |
 
 The torch starts on. Move the mouse to sweep it, and press **F** to switch it off. Light comes from the diver's right hand, fades across 5.5 to 11 scene units and casts a moving shadow. Water scattering is visible when the torch points beyond the seabed. The sand ridges and drifts are geometry shared by the visible scene and the torch shadow pass.
+
+Press **7** for the three planks beside the muzzle and **8** for the oblique view. The upper strake splits along its fibers, leaving a narrow tip and a recessed gray-brown end. The middle plank curls away from a nail that remains in the frame. Lateral movement reveals the space between nail, plank and rib. A local sand drift covers part of the lower seam, where sediment and a short cluster of growth collect beneath the rounded lip. Across the wreck, end checks vary between strakes, deck ends and barrel staves have lost material, and washed-out grain breaks up the timber colors. [See the two wood studies and their surroundings](docs/weathered-wreck/review.png).
 
 ## Inside the broken gunport
 

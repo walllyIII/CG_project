@@ -16,14 +16,14 @@ void drawGraybox(double time);
 namespace {
 constexpr double rad=3.141592653589793/180;
 struct Camera {double x=-1.5,y=2.8,z=10,yaw=29,pitch=34;};
-constexpr Camera views[]={{}, {-1.35,2.45,2.5,12,-9}, {2.15,3.45,-5.65,-22,-20},{1.3101,3.4835,-7.5140,30.1826,-29.5680},{0.4927,3.4423,-7.7811,-3.8180,-36.5875},{0.6520,3.3110,-7.7215,-0.6869,-9.4501},{-1.5,2.8,10,-12,-34},{-2.4,1.7,5.4,18,-24},{-1.8,2.35,-1.45,24,-22},{2.15,3.45,-5.65,32,43}};
+constexpr Camera views[]={{}, {-1.35,2.45,2.5,12,-9}, {2.15,3.45,-5.65,-22,-20},{1.3101,3.4835,-7.5140,30.1826,-29.5680},{0.4927,3.4423,-7.7811,-3.8180,-36.5875},{0.6520,3.3110,-7.7215,-0.6869,-9.4501},{-1.5,2.8,10,-12,-34},{-2.4,1.7,5.4,18,-24},{-1.8,2.35,-1.45,24,-22},{2.15,3.45,-5.65,32,43},{2.0107,3.2636,-5.5925,11.7315,-28.8653},{0.7984,2.7285,-6.8128,61.0290,-17.7588}};
 constexpr const char* names[]={"discovery","approach","inspection"};
 
 // Replay 120 seconds of camera travel on a fixed simulation clock. The same
 // poses drive the interactive bookmarks and the captured review frames.
 Camera routePose(double frame){
     struct Stop {double frame; int view;};
-    constexpr Stop stops[]={{0,0},{50,0},{170,6},{235,0},{320,6},{465,7},{600,1},{690,8},{780,2},{860,3},{925,4},{980,5},{1030,2},{1110,2},{1190,9},{1200,9}};
+    constexpr Stop stops[]={{0,0},{50,0},{170,6},{235,0},{320,6},{465,7},{600,1},{663,8},{715,10},{750,11},{795,2},{860,3},{925,4},{980,5},{1030,2},{1110,2},{1190,9},{1200,9}};
     int leg=0;
     while(leg+2<int(sizeof(stops)/sizeof(stops[0])) && frame>stops[leg+1].frame) ++leg;
     const Stop from=stops[leg],to=stops[leg+1];
@@ -44,6 +44,8 @@ void look(GLFWwindow* w,double x,double y){
 }
 void move(GLFWwindow* w,Camera &c,double dt){
     auto key=[&](int k){return glfwGetKey(w,k)==GLFW_PRESS;};
+    if(key(GLFW_KEY_7)){c=views[10];return;}
+    if(key(GLFW_KEY_8)){c=views[11];return;}
     if(key(GLFW_KEY_ESCAPE)) glfwSetWindowShouldClose(w,true);
     for(int i=0;i<6;++i){
         if(key(GLFW_KEY_1+i) || (i==0 && key(GLFW_KEY_R))){c=views[i];return;}
@@ -128,7 +130,7 @@ int main(int argc,char** argv){
         {"plank-far",2,{true,false,true,true},4},
         {"gun-room-rope",3,{},4},{"gun-room-crate",4,{},4},{"gun-room-berth",5,{},4},{"gun-room-berth-later",5,{},6},
         {"open-water",0,{},5},{"chain",6,{},17},{"chain-ahead",7,{},46.5},
-        {"drift",8,{},69},{"current-a",2,{},103},{"current-b",2,{},105},{"turned-away",9,{},119}
+        {"drift",8,{},69},{"current-a",2,{},103},{"current-b",2,{},105},{"turned-away",9,{},119},{"aged-front",10,{},72},{"aged-side",11,{},72}
     };
     constexpr int filmFrames=24*120;
     std::vector<char> filmPixels;

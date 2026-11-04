@@ -21,12 +21,12 @@ PFNGLUNIFORM1FPROC setFloat;
 GLint flags[4],clockLocation;
 const char* vert=R"(
 #version 120
-varying vec3 eye,world,n;
+varying vec3 eye,world,n,objectPoint;
 varying vec4 lightClip,material;
 varying vec2 surface;
 void main(){
     vec4 e=gl_ModelViewMatrix*gl_Vertex;
-    eye=e.xyz;
+    eye=e.xyz;objectPoint=gl_Vertex.xyz;
     world=(gl_TextureMatrix[0]*e).xyz;
     lightClip=gl_TextureMatrix[1]*vec4(world,1.0);
     n=mat3(gl_TextureMatrix[0])*gl_NormalMatrix*gl_Normal;
@@ -35,7 +35,7 @@ void main(){
 })";
 const char* frag=R"(
 #version 120
-varying vec3 eye,world,n;
+varying vec3 eye,world,n,objectPoint;
 varying vec4 lightClip,material;
 varying vec2 surface;
 uniform sampler2D depthMap,patternMap,torchMap;
@@ -110,10 +110,16 @@ void main(){
         rough=mix(rough,.88,oxide); metal*=1.-oxide;
         relief=.011*oxide*pits+.002*fine;
     }else if(rough<.7 && metal<.1){
-        float grain=valueNoise(vec3(world.x*.86,world.y*36.+2.*pits,world.z*3.));
-        float grooves=smoothstep(.57,.83,grain);
-        base*=.52+.58*grain+.22*pits-.34*grooves;
-        relief=.013*grain+.003*fine;
+        vec3 p=objectPoint;
+        float warp=valueNoise(p*vec3(.71,2.4,1.5));
+        float grain=valueNoise(vec3(p.x*3.1,p.y*44.+6.4*warp,p.z*7.));
+        float pores=smoothstep(.55,.82,grain);
+        float checks=smoothstep(.66,.86,valueNoise(vec3(p.x*1.8,p.y*105.+4.*warp,p.z*8.)));
+        float bleach=smoothstep(.32,.80,warp)*.57;
+        base=mix(base,vec3(dot(base,vec3(.33,.52,.15)))*vec3(.92,.94,.88),bleach);
+        base*=.67+.37*grain+.21*pits-.32*pores-.30*checks;
+        rough=clamp(rough+.13*pores-.09*warp,.38,.84);
+        relief=.003*grain-.0038*checks+.001*fine;
     }else{
         float ripple=sin(world.x*7.+world.z*3.2+2.4*valueNoise(world*.65));
         base*=.65+.33*pits+.22*fine;
@@ -122,7 +128,8 @@ void main(){
     vec3 dx=dFdx(world),dy=dFdy(world);
     vec3 r1=cross(dy,N),r2=cross(N,dx);
     float det=dot(dx,r1);
-    N=normalize(max(abs(det),.0000001)*N-sign(det)*(dFdx(relief)*r1+dFdy(relief)*r2));
+    vec3 slope=sign(det)*(dFdx(relief)*r1+dFdy(relief)*r2)/max(abs(det),.0000001);
+    N=normalize(N-slope/(1.+2.4*length(slope)));
     float lit=visibility(lightClip.xyz/lightClip.w*.5+.5);
     vec2 uv=(world.xz-world.y*sun.xz/sun.y)*.085;
     uv+=.024*vec2(sin(uv.y*14.+clockTime*.19),cos(uv.x*12.-clockTime*.15));

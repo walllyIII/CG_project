@@ -28,6 +28,81 @@ void spar(Point a,Point b,double ra,double rb,bool cap=true,int sides=12){
         if(cap && rb>0) face({b,b+e*rb,b+f*rb});
     }
 }
+// Coordinates on the three strakes immediately forward of the gun opening.
+// A positive depth lifts a fragment out of the hull toward the hand torch.
+Point gunPlank(double x,double y,double depth){
+    double h=(y-.12)/3.43;
+    return {x,y,(2.45-.133*(x-2.))*(.24+.76*h)+.045+depth};
+}
+void scarFace(Point a,Point b,Point c,Point d){
+    face({a,b,c});face({a,c,d});
+}
+void wornGunport(){
+    // Separate strips trace the longitudinal split. The surviving narrow
+    // tongue projects beyond the dull, recessed fracture beside it.
+    for(int row=5;row<=7;++row){
+        double y=.12+3.43*row*.1;
+        constexpr int bands=12, spans=13;
+        for(int band=0;band<bands;++band){
+            auto shape=[&](int line,int segment){
+                double v=line/double(bands),u=segment/double(spans);
+                double end=1.88;
+                if(row==7){
+                    end=2.03+.088*std::sin(line*2.37);
+                    if(line==8) end=1.17;
+                    if(line==7 || line==9) end=1.60;
+                    if(line==6) end=2.38;
+                }else if(row==6){
+                    // The missing wedge intersects the old fastening.
+                    end=1.84+.44*std::exp(-std::pow((v-.55)/.17,2));
+                }else end=1.89+.035*std::cos(line*.71);
+                double x=end+(4.995-end)*u;
+                double lift=row==6?.25*std::exp(-2.4*(x-1.84))*(.65+.35*v):0.;
+                double roll=row==5?.045*std::sin(pi*v):0.;
+                double tip=row==7?.085*std::max(0.,2.-x):0.;
+                double edge=(v==0 || v==1)?-.018:0.;
+                return gunPlank(x,y+.323*v+.012*std::sin(2.6*x+row),lift+roll+edge+tip);
+            };
+            for(int j=0;j<spans;++j){
+                Point a=shape(band,j),b=shape(band,j+1),c=shape(band+1,j+1),d=shape(band+1,j);
+                double tone=.96+.047*std::sin(band*1.7);
+                glTexCoord2f(.62f,0);glColor3d(.20*tone,.147*tone,.095*tone);
+                scarFace(a,b,c,d);
+                Point back{0,0,-.104};
+                glColor3f(.165f,.139f,.104f);
+                if(j==0) scarFace(a,d,d+back,a+back);
+                if(band==0) scarFace(a,b,b+back,a+back);
+                if(band==bands-1) scarFace(d,c,c+back,d+back);
+            }
+        }
+    }
+    // The last few centimetres of the splinter are burnished along the ridge.
+    glTexCoord2f(.39f,0);glColor3f(.29f,.23f,.157f);
+    Point tip=gunPlank(1.17,2.739,.073);
+    face({tip,gunPlank(1.46,2.756,.061),gunPlank(1.43,2.736,.074)});
+    // Flattened hoop nail remains in the rib behind the broken notch.
+    glTexCoord2f(.58f,0);glColor3f(.13f,.10f,.066f);
+    spar(gunPlank(2.02,1.25,-.25),gunPlank(2.14,3.1,-.25),.14,.105,true,7);
+    Point shank=gunPlank(2.11,2.37,-.20);
+    glTexCoord2f(.58f,.87f);glColor3f(.19f,.129f,.077f);
+    spar(shank,shank+Point{.023,-.014,.25},.019,.025);
+    spar(shank+Point{.023,-.014,.24},shank+Point{.026,-.014,.258},.047,.043,true,7);
+    // Dark silt remains under the worn lip. A short, uneven fan of sand
+    // spills down the outside and merges into the existing seabed bank.
+    glTexCoord2f(.89f,0);glColor3f(.079f,.070f,.052f);
+    for(int j=0;j<10;++j){
+        double x=2.36+.102*j;
+        Point a=gunPlank(x,1.845+.013*std::sin(1.8*j),.012);
+        Point b=gunPlank(x+.11,1.849+.012*std::sin(1.8*(j+1)),.016);
+        face({a,b,b+Point{0,.018,.003},a+Point{0,.009,.003}});
+    }
+    for(int j=0;j<15;++j){
+        double x=2.84+.022*j+.029*std::sin(2.8*j);
+        Point foot=gunPlank(x,2.164+.014*std::sin(j*2.3),.03);
+        glTexCoord2f(.91f,0);glColor3f(.16f,.17f,.12f);
+        spar(foot,foot+Point{.002,-.007,.019},.013+.008*(j%3),.006,false,7);
+    }
+}
 void hull(){
     glTexCoord2f(.55f,0);glColor3f(.27f,.13f,.061f);
     const double stations[]={-8,-6,-3,0,2,5,8,9};
@@ -44,14 +119,16 @@ void hull(){
             // Overlapping strakes have visible upper edges and a staggered,
             // splintered end on either side of the gun opening.
             for(int row=0;row<10;++row){
-                double low=row*.10, high=low+.098;
+                if(side>0 && i==4 && row>=5 && row<=7) continue;
+                double low=row*.10, high=low+.097;
                 bool torn=side>0 && i==3 && row>=5;
                 double tone=.91+.13*std::sin(i*4.1+row*1.9);
-                glColor3d(.29*tone,.142*tone,.067*tone);
+                glTexCoord2f(.62f,0);glColor3d(.224*tone,.147*tone,.087*tone);
                 auto board=[&](double u,double h){
                     Point a=at(i,h), b=at(i+1,h);
                     Point p=a+(b-a)*u;
-                    p.z+=side*(.04+.018*std::sin(row*2.3));
+                    p.y+=.023*std::sin(p.x*1.15+row*1.72);
+                    p.z+=side*(.04+.031*std::sin(row*2.3)+.027*std::sin(p.x*1.36+row));
                     return p;
                 };
                 auto section=[&](double lowerStart,double lowerEnd,double upperStart,double upperEnd){
@@ -64,8 +141,12 @@ void hull(){
                 if(torn){
                     double stub=.06+.055*(1+std::sin(row*2.7));
                     section(0,stub+.055,0,stub*.4);
-                    section(.91-.045*std::cos(row*3.),1,.97,1);
-                }else section(.002,.998,.002,.998);
+                    if(row<5 || row>7) section(.91-.045*std::cos(row*3.),1,.97,1);
+                }else{
+                    // Unequal end checks and eroded corners interrupt straight seams.
+                    double chip=.007+.023*(.5+.5*std::sin(i*2.4+row*1.37));
+                    section(chip,.998,.002,1.-chip);
+                }
             }
             if(i!=3 || side<0){
                 glColor3f(.19f,.09f,.038f);
@@ -75,6 +156,7 @@ void hull(){
         }
     }
     face({{-6.85,.12,-.36},{-6.85,.12,.36},{-8,4.4,1.5},{-8,4.4,-1.5}});
+    wornGunport();
     // Raised stern rail and exposed frames preserve a legible wreck silhouette.
     for(int j=0;j<3;++j){
         double x=-7.8+j*.88, top=4.38-j*.16;
@@ -85,7 +167,7 @@ void hull(){
         glColor3f(.17f,.088f,.044f);
         spar({stations[j],1.4,-beam[j]*.5},{stations[j],rim[j]+.12,-beam[j]},.13,.105);
     }
-    glColor3f(.23f,.11f,.05f);
+    glColor3f(.18f,.129f,.077f);
     spar({-2.8,1,0},{-4.4,8.25,.25},.32,.20);
     spar({-4.3,7.6,.2},{-5.15,8.75,.22},.14,.018);
     spar({-7.3,6.75,.32},{-.8,5.95,.30},.14,.10);
@@ -132,7 +214,9 @@ void cannon(){
     glTexCoord2f(.58f,0);glColor3f(.18f,.085f,.037f);
     for(int j=0;j<20;++j){
         double x=-3.48+.34*j;
-        face({{x,1.74,-1.82},{x,1.74,1.47},{x+.328,1.74,1.47},{x+.328,1.74,-1.82}});
+        double wear=.055+.087*(1.+std::sin(j*2.73));
+        glColor3d(.16+.026*std::sin(j),.108+.015*std::sin(j),.066);
+        face({{x,1.74,-1.82},{x,1.74,1.47-wear},{x+.328,1.74,1.47-.28*wear},{x+.328,1.74,-1.82}});
     }
 }
 void anchor(){
@@ -158,7 +242,8 @@ double bed(double x,double z){
     double axis=z+9.0-.32*x;
     double bank=1.58*std::exp(-axis*axis/4.6-x*x/58.);
     double crest=std::sin(6.1*z+2.8*x+.90*std::sin(.7*x)+.58*std::sin(.63*z));
-    return -.13+bank+.12*std::sin(.33*x+.25*z)+.055*std::cos(.53*x-.39*z)
+    double pocket=.70*std::exp(-std::pow((x-3.01)/1.12,2)-std::pow((z+7.83)/1.34,2));
+    return -.13+bank+pocket+.12*std::sin(.33*x+.25*z)+.055*std::cos(.53*x-.39*z)
         +(.028+.012*std::sin(x*.69))*crest+.012*crest*crest;
 }
 // Rectangular timbers keep a closed end grain and cast solid torch shadows.
@@ -359,11 +444,12 @@ void barrel(double x,double z,double yaw,double scale){
     glPushMatrix();glTranslated(x,bed(x,z)+.46*scale,z);glRotated(yaw,0,1,0);
     glRotated(73,1,0,0);glScaled(scale,scale,scale);
     for(int j=0;j<14;++j){
-        double tone=.70+.27*std::cos(j*5.2);
-        glTexCoord2f(.53f,0);glColor3d(.33*tone,.17*tone,.071*tone);
+        double tone=.68+.19*std::cos(j*5.2);
+        glTexCoord2f(.53f,0);glColor3d(.24*tone,.173*tone,.102*tone);
         auto stave=[&](int end,double y,double r){
             double a=(j+.025+end*.95)*2*pi/14;
-            return Point{r*std::cos(a),y,r*std::sin(a)};
+            double loss=(y>0 && j%5==1)?(.055+.052*end):0.;
+            return Point{r*std::cos(a),y-loss,r*std::sin(a)};
         };
         for(int half:{-1,1})face({stave(0,0,.49),stave(1,0,.49),stave(1,half*.59,.39),stave(0,half*.59,.39)});
     }
@@ -387,8 +473,9 @@ void spill(){
         glPushMatrix();glTranslated(x,bed(x,z)+.31,z);glRotated(22+i*29,0,1,0);glRotated(i*4,0,0,1);
         glTexCoord2f(.59f,0);
         for(int j=0;j<5;++j){
-            glColor3d(.29+j*.012,.137+j*.009,.058+j*.006);
-            timber({(j-2)*.22,0,0},.214,.75,.79);
+            glColor3d(.195+j*.009,.137+j*.006,.081+j*.006);
+            double lostCorner=(j==4?.13:.012)*(1.+.4*std::cos(i+j));
+            timber({(j-2)*.22,-lostCorner*.5,0},.214,.75-lostCorner,.79);
         }
         glColor3f(.14f,.073f,.031f);
         for(double end:{-.41,.41}){
@@ -416,6 +503,8 @@ void seabedDetails(){
         double cz=8.-group*2.35;
         for(int j=0;j<9;++j){
             double x=cx+1.8*std::sin(j*3.1+group),z=cz+1.3*std::cos(j*2.+group);
+            // Loose stones settle into the drift rather than balancing on its crest.
+            if(x>1.6 && x<4.6 && z>-9.3 && z<-6.1) continue;
             double y=bed(x,z)-.06,r=.12+.13*(1.+std::sin(j*4.+group));
             glTexCoord2f(.89f,0);
             glColor3d(.21+j*.008,.235+j*.008,.18+j*.007);
