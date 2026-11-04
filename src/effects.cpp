@@ -104,7 +104,21 @@ void main(){
     // have different spatial frequencies. A patchy oxide layer covers the iron.
     float pits=valueNoise(world*8.5), fine=valueNoise(world*35.);
     float relief;
-    if(surface.z>.5){
+    if(surface.z>2.5){
+        float film=.7*pits+.3*fine;
+        base*=.75+.36*film+.14*surface.w;
+        rough=.54-.17*surface.w+.08*pits;
+        relief=.0014*(fine+surface.w);
+    }else if(surface.z>1.5){
+        float strata=valueNoise(world*vec3(6.,19.,7.));
+        float pores=smoothstep(.61,.83,.7*pits+.3*fine);
+        float vein=1.-smoothstep(.025,.107,abs(strata-.53));
+        base*=.46+.58*strata+.26*fine-.41*pores;
+        base+=vec3(.041,.031,.020)*vein;
+        base=mix(vec3(.185,.16,.112)*(.83+.30*fine),base,smoothstep(.0,.64,surface.w+.13*(pits-.5)));
+        rough=.64+.24*pores+.07*(1.-surface.w);
+        relief=.013*strata-.014*pores+.002*fine;
+    }else if(surface.z>.5){
         float joint=1.-smoothstep(.009,.070+.036*pits,surface.w);
         vec2 seat=(objectPoint.yz-vec2(-.10,-.28))/vec2(.19,.25);
         float contact=(1.-smoothstep(.45,1.45,length(seat)))*smoothstep(.22,.36,abs(objectPoint.x));

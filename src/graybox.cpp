@@ -546,31 +546,100 @@ void spill(){
         ellipsoid({x,bed(x,z)-.085,z},{.17,.17,.17});
     }
 }
-void seabedDetails(){
-    // Low, asymmetric stones collect in patches beside the swimming corridor.
+// Each site has its own stone bed and rooted tufts, leaving open sand
+// between the patches along the dive route.
+Point patchCenter(int group){
+    return {(group%2?-1.:1.)*(4.+1.4*std::sin(group*3.7)),0,8.-group*2.35};
+}
+double signedPower(double x,double exponent){
+    return std::copysign(std::pow(std::abs(x),exponent),x);
+}
+void waterwornRock(Point center,double radius,double seed){
+    auto position=[&](double angle,double latitude){
+        double c=std::cos(latitude),u=c*std::cos(angle),v=std::sin(latitude),w=c*std::sin(angle);
+        double shelf=.12*std::sin(4.*u+seed)*std::cos(3.*w-2.*v);
+        double ledge=.08*std::tanh(8.*(v+.26*u-.17));
+        double cleft=.105*std::exp(-std::pow((w+.33*u-.22)*8.,2))*std::max(0.,v);
+        double hollow=.14*std::exp(-12.*((u-.52)*(u-.52)+(w-.50)*(w-.50)));
+        double scale=1.+shelf+ledge-hollow-cleft;
+        return center+Point{radius*(1.23*signedPower(u,.68)*scale+.13*v),
+            radius*(.95+.21*std::sin(seed))*signedPower(v,.64)*scale,
+            radius*(.86+.16*std::cos(seed))*signedPower(w,.71)*scale};
+    };
+    for(int j=0;j<13;++j){
+        glBegin(GL_QUAD_STRIP);
+        for(int i=0;i<=28;++i) for(int edge:{0,1}){
+            double a=2*pi*i/28.,l=-pi/2+(j+edge)*pi/13.;
+            double safe=std::clamp(l,-pi/2+.002,pi/2-.002);
+            Point p=position(a,l);
+            Point n=unit(cross(position(a,safe+.001)-position(a,safe-.001),
+                               position(a+.001,safe)-position(a-.001,safe)));
+            double burial=std::clamp((p.y-bed(p.x,p.z))/(.45*radius),0.,1.);
+            glTexCoord4d(.8,0,2,burial);
+            glColor3d(.173+.032*std::sin(seed),.184+.024*std::sin(seed),.159+.031*std::cos(seed));
+            glNormal3d(n.x,n.y,n.z);glVertex3d(p.x,p.y,p.z);
+        }
+        glEnd();
+    }
+}
+void seabedStones(){
     for(int group=5;group<9;++group){
-        double cx=(group%2?-1.:1.)*(4.+1.4*std::sin(group*3.7));
-        double cz=8.-group*2.35;
-        for(int j=0;j<9;++j){
-            double x=cx+1.8*std::sin(j*3.1+group),z=cz+1.3*std::cos(j*2.+group);
-            // Loose stones settle into the drift rather than balancing on its crest.
+        Point c=patchCenter(group);
+        for(int j=0;j<10;++j){
+            double seed=group*1.71+j*4.38;
+            double x=c.x+1.13*std::cos(seed),z=c.z+.77*std::sin(j*2.34+group);
             if(x>1.6 && x<4.6 && z>-9.3 && z<-6.1) continue;
-            double y=bed(x,z)-.06,r=.12+.13*(1.+std::sin(j*4.+group));
-            glTexCoord2f(.89f,0);
-            glColor3d(.21+j*.008,.235+j*.008,.18+j*.007);
-            Point crown{x-.16*r,y+.71*r,z+.22*r};
-            for(int k=0;k<7;++k){
-                auto edge=[&](int m){double t=m*2*pi/7;return Point{x+1.4*r*std::cos(t),y,z+r*std::sin(t)};};
-                face({edge(k+1),edge(k),crown});
+            double radius=j==0?.57:.13+.115*(1.+std::sin(seed*1.56));
+            waterwornRock({x,bed(x,z)-.17*radius,z},radius,seed);
+        }
+    }
+}
+void grassBlade(Point root,double angle,double height,double width,double phase,double time){
+    // Closed lens-shaped sections twist up the blade. The folded midrib,
+    // thin edges and both faces participate in the torch depth pass.
+    Point rings[12][6];
+    for(int j=0;j<12;++j){
+        double t=j/11.,flow=std::sin(time*.79+phase-2.4*t);
+        double a=angle+.85*t+.32*t*flow;
+        double reach=height*(.07*t+(.56+.20*std::sin(phase))*t*t);
+        Point axis=root+Point{reach*std::cos(angle)+height*t*t*(.17+.18*flow),
+            height*(t-(.29+.12*std::cos(phase))*t*t*t),reach*std::sin(angle)+.04*t*t*std::cos(time*.53+phase)};
+        double span=width*(.38+.64*std::sin(pi*std::pow(t,.77)))*(1.-.85*std::pow(t,4));
+        double notch=(j==8 && std::sin(phase)>.2)?.47:1.;
+        Point across{std::cos(a),0,std::sin(a)},fold{-std::sin(a),0,std::cos(a)};
+        const double side[]={-notch,-.36,.06,1.,.12,-.45},depth[]={0.,.15,.43,.035,-.09,-.07};
+        for(int k=0;k<6;++k) rings[j][k]=axis+across*(side[k]*span)+fold*(depth[k]*span);
+    }
+    for(int k=0;k<6;++k){
+        int next=(k+1)%6;
+        glBegin(GL_QUAD_STRIP);
+        for(int j=0;j<12;++j){
+            double t=j/11.;
+            Point tangent=rings[std::min(j+1,11)][k]-rings[std::max(j-1,0)][k];
+            Point n=unit(cross(rings[j][next]-rings[j][k],tangent));
+            for(int edge:{k,next}){
+                bool rib=edge==2;
+                glTexCoord4d(.55,0,3,rib?1.:0.);
+                double tint=.90+.10*std::cos(phase);
+                glColor3d(tint*(.041+.062*t+.014*rib),tint*(.073+.092*t+.020*rib),.024+.041*t);
+                Point p=rings[j][edge];glNormal3d(n.x,n.y,n.z);glVertex3d(p.x,p.y,p.z);
             }
         }
-        // Short, static seagrass blades give the rocks scale.
-        glTexCoord2f(.82f,0);glColor3f(.075f,.16f,.093f);
-        for(int j=0;j<12;++j){
-            double x=cx+.57*std::sin(j*2.),z=cz+.49*std::cos(j*1.7);
-            double y=bed(x,z),h=.28+.2*(1.+std::cos(j));
-            face({{x-.055,y-.08,z},{x+.055,y-.08,z},{x+.09,y+h*.6,z+.08}});
-            face({{x-.055,y-.08,z},{x+.09,y+h*.6,z+.08},{x+.19,y+h,z+.14}});
+        glEnd();
+    }
+}
+void seagrass(double time){
+    for(int group=5;group<9;++group){
+        Point c=patchCenter(group);
+        for(int tuft=0;tuft<6;++tuft){
+            double phase=group+tuft*2.40;
+            double x=c.x+.86*std::cos(phase),z=c.z+.69*std::sin(phase);
+            for(int j=0;j<8;++j){
+                double a=j*2.4+phase;
+                double px=x+.068*std::cos(a),pz=z+.069*std::sin(a);
+                double height=.34+.29*(1.+std::sin(1.63*a));
+                grassBlade({px,bed(px,pz)-.065,pz},a,height,.030+.012*(1.+std::cos(a)),phase+.14*j,time);
+            }
         }
     }
 }
@@ -591,7 +660,7 @@ void staticWreck(){
     }
     glPushMatrix();glTranslated(.6,-.48,-9.6);glRotated(-18,0,1,0);glRotated(-12,1,0,0);
     hull();wreckFittings();cannon();glPopMatrix();
-    anchor();seabedDetails();spill();
+    anchor();seabedStones();spill();
     glTexCoord2f(.60f,.55f);glColor3f(.32f,.33f,.33f);
     for(int i=-10;i<32;++i){
         double z=3.65-i*.34, x=-2.12+i*.105;
@@ -611,6 +680,7 @@ void drawGraybox(double time){
         fixedScene=glGenLists(1);glNewList(fixedScene,GL_COMPILE);staticWreck();glEndList();
     }
     glCallList(fixedScene);
+    seagrass(time);
     glPushMatrix();glTranslated(.6,-.48,-9.6);glRotated(-18,0,1,0);glRotated(-12,1,0,0);
     gunRoom(time);glPopMatrix();
 }

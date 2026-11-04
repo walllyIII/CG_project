@@ -16,14 +16,14 @@ void drawGraybox(double time);
 namespace {
 constexpr double rad=3.141592653589793/180;
 struct Camera {double x=-1.5,y=2.8,z=10,yaw=29,pitch=34;};
-constexpr Camera views[]={{}, {-1.35,2.45,2.5,12,-9}, {2.15,3.45,-5.65,-22,-20},{1.3101,3.4835,-7.5140,30.1826,-29.5680},{0.4927,3.4423,-7.7811,-3.8180,-36.5875},{0.6520,3.3110,-7.7215,-0.6869,-9.4501},{-1.5,2.8,10,-12,-34},{-2.4,1.7,5.4,18,-24},{-1.8,2.35,-1.45,24,-22},{2.15,3.45,-5.65,32,43},{2.0107,3.2636,-5.5925,11.7315,-28.8653},{0.7984,2.7285,-6.8128,61.0290,-17.7588},{2.9504,2.4184,-8.3554,-26.0711,-28.3130},{0.5549,3.0400,-7.7785,29.2334,-36.4856}};
+constexpr Camera views[]={{}, {-1.35,2.45,2.5,12,-9}, {2.15,3.45,-5.65,-22,-20},{1.3101,3.4835,-7.5140,30.1826,-29.5680},{0.4927,3.4423,-7.7811,-3.8180,-36.5875},{0.6520,3.3110,-7.7215,-0.6869,-9.4501},{-1.5,2.8,10,-12,-34},{-2.4,1.7,5.4,18,-24},{-1.8,2.35,-1.45,24,-22},{2.15,3.45,-5.65,32,43},{2.0107,3.2636,-5.5925,11.7315,-28.8653},{0.7984,2.7285,-6.8128,61.0290,-17.7588},{2.9504,2.4184,-8.3554,-26.0711,-28.3130},{0.5549,3.0400,-7.7785,29.2334,-36.4856},{-2.48,1.07,-1.60,-35,-14},{-5.47,.95,-1.94,39,-13}};
 constexpr const char* names[]={"discovery","approach","inspection"};
 
 // Replay 120 seconds of camera travel on a fixed simulation clock. The same
 // poses drive the interactive bookmarks and the captured review frames.
 Camera routePose(double frame){
     struct Stop {double frame; int view;};
-    constexpr Stop stops[]={{0,0},{50,0},{170,6},{235,0},{320,6},{465,7},{600,1},{663,8},{715,10},{750,11},{795,2},{811,13},{840,12},{875,3},{925,4},{980,5},{1030,2},{1110,2},{1190,9},{1200,9}};
+    constexpr Stop stops[]={{0,0},{50,0},{170,6},{235,0},{320,6},{465,7},{525,1},{566,14},{596,14},{628,15},{663,8},{715,10},{750,11},{795,2},{811,13},{840,12},{875,3},{925,4},{980,5},{1030,2},{1110,2},{1190,9},{1200,9}};
     int leg=0;
     while(leg+2<int(sizeof(stops)/sizeof(stops[0])) && frame>stops[leg+1].frame) ++leg;
     const Stop from=stops[leg],to=stops[leg+1];
@@ -45,6 +45,7 @@ void look(GLFWwindow* w,double x,double y){
 void move(GLFWwindow* w,Camera &c,double dt){
     auto key=[&](int k){return glfwGetKey(w,k)==GLFW_PRESS;};
     if(key(GLFW_KEY_7)){c=views[10];return;}
+    if(key(GLFW_KEY_0)){c=views[14];return;}
     if(key(GLFW_KEY_9)){c=views[12];return;}
     if(key(GLFW_KEY_8)){c=views[11];return;}
     if(key(GLFW_KEY_ESCAPE)) glfwSetWindowShouldClose(w,true);
@@ -131,7 +132,7 @@ int main(int argc,char** argv){
         {"plank-far",2,{true,false,true,true},4},
         {"gun-room-rope",3,{},4},{"gun-room-crate",4,{},4},{"gun-room-berth",5,{},4},{"gun-room-berth-later",5,{},6},
         {"open-water",0,{},5},{"chain",6,{},17},{"chain-ahead",7,{},46.5},
-        {"drift",8,{},69},{"current-a",2,{},103},{"current-b",2,{},105},{"turned-away",9,{},119},{"aged-front",10,{},72},{"aged-side",11,{},72},{"wheel-sand",12,{},84},{"muzzle-wear",13,{},81}
+        {"drift",8,{},69},{"current-a",2,{},103},{"current-b",2,{},105},{"turned-away",9,{},119},{"aged-front",10,{},72},{"aged-side",11,{},72},{"wheel-sand",12,{},84},{"muzzle-wear",13,{},81},{"grass-front",14,{},56.6},{"grass-side",15,{},56.6},{"grass-current",14,{},59.6}
     };
     constexpr int filmFrames=24*120;
     std::vector<char> filmPixels;
@@ -173,8 +174,8 @@ int main(int argc,char** argv){
             ok=std::cout.good() && glGetError()==GL_NO_ERROR;
             if(!ok || frame+1==filmFrames) break;
         }
-        if(route && (frame==0 || frame==600 || frame==1030)){
-            int view=frame==0?0:(frame==600?1:2);
+        if(route && (frame==0 || frame==525 || frame==1030)){
+            int view=frame==0?0:(frame==525?1:2);
             std::string path=(std::filesystem::path(argv[2])/(std::string(names[view])+".ppm")).string();
             ok=capture(path.c_str(),width,height);
             std::cout<<"Route frame "<<frame<<" ("<<frame/10<<" s): "<<names[view]<<std::endl;
