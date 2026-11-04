@@ -86,7 +86,7 @@ vec3 waterScatter(vec3 endpoint){
     float scatter=0.;
     for(int i=0;i<10;i++){
         float t=(float(i)+.5)*reach/10.;
-        vec3 q=dir*t-vec3(.36,-.28,-.22);
+        vec3 q=(gl_TextureMatrix[2]*vec4(dir*t,1.)).xyz;
         vec3 p=(gl_TextureMatrix[0]*vec4(dir*t,1.)).xyz;
         float density=.91+.30*sin(.83*clockTime-.52*p.x-.19*p.z)
                           +.17*sin(p.y*2.3+.58*p.z-.61*clockTime);
@@ -165,11 +165,11 @@ void main(){
     float caustic=caustics?lines*smoothstep(.05,.72,dot(N,sun))*exp(-.055*max(0.,8.-world.y)):0.;
     vec3 color=.0018*base+lit*vec3(.045,.11,.16)*(.095+.07*caustic)*brdf(N,V,sun,base,rough,metal);
     vec3 waterColor=vec3(.00035,.0018,.0039);
-    vec3 ray=eye-vec3(.36,-.28,-.22);
+    vec3 ray=(gl_TextureMatrix[2]*vec4(eye,1.)).xyz;
     float range=length(ray);
     float beam=smoothstep(.879,.981,-ray.z/max(.001,range));
     if(lamp && beam>0. && range<14. && ray.z<-.15){
-        vec3 L=normalize(mat3(gl_TextureMatrix[0])*(-ray));
+        vec3 L=normalize(mat3(gl_TextureMatrix[0])*((-ray)*mat3(gl_TextureMatrix[2])));
         float power=31.*beam*(1.-smoothstep(5.5,11.,range))/(1.+.30*range*range);
         color+=vec3(.90,.97,1.)*power*torchVisibility(ray)*brdf(N,V,L,base,rough,metal);
     }
@@ -227,19 +227,24 @@ bool initEffects(){
     clockLocation=location(program,"clockTime");
     return glGetError()==GL_NO_ERROR;
 }
-void bindEffects(const Effects& e,double time,double x,double y,double z,double yaw,double pitch){
+static void eyeToTorch(const TorchPose& pose){
+    glRotated(-pose.pitch,1,0,0);
+    glTranslated(-pose.x,-pose.y,-pose.z);
+}
+void bindEffects(const Effects& e,double time,double x,double y,double z,double yaw,double pitch,const TorchPose& pose){
     if(e.lamp){
         GLint viewport[4]; glGetIntegerv(GL_VIEWPORT,viewport);
         shader::bind(0);torch.bind();glClear(GL_DEPTH_BUFFER_BIT);
         glMatrixMode(GL_PROJECTION);glPushMatrix();glLoadIdentity();
         glFrustum(-.078,.078,-.078,.078,.15,14.);
         glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();
-        glTranslated(-.36,.28,.22);glRotated(-pitch,1,0,0);glRotated(yaw,0,1,0);glTranslated(-x,-y,-z);
+        eyeToTorch(pose);glRotated(-pitch,1,0,0);glRotated(yaw,0,1,0);glTranslated(-x,-y,-z);
         glEnable(GL_POLYGON_OFFSET_FILL);glPolygonOffset(2.5f,3.f);
         drawGraybox(time);glDisable(GL_POLYGON_OFFSET_FILL);glPopMatrix();glMatrixMode(GL_PROJECTION);glPopMatrix();
         bindScreen(viewport[2],viewport[3]);shader::bind(program);
     }
     activeTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,torch.depth);
+    glMatrixMode(GL_TEXTURE);glLoadIdentity();eyeToTorch(pose);
     activeTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,shadow.depth);
     glMatrixMode(GL_TEXTURE);glLoadIdentity();glTranslated(x,y,z);
     glRotated(-yaw,0,1,0);glRotated(pitch,1,0,0);
@@ -248,20 +253,25 @@ void bindEffects(const Effects& e,double time,double x,double y,double z,double 
     setInt(flags[0],e.water);setInt(flags[1],e.caustics);setInt(flags[2],e.shadows);setInt(flags[3],e.lamp);
     setFloat(clockLocation,static_cast<float>(time));
 }
-void drawHandLight(bool on);
+void drawHandLight(bool on,const TorchPose& pose);
 namespace {
 struct EyePoint { double x,y,z; };
 EyePoint projectWaterPoint(const GLdouble* m,double x,double y,double z){
     return {m[0]*x+m[4]*y+m[8]*z+m[12],m[1]*x+m[5]*y+m[9]*z+m[13],
             m[2]*x+m[6]*y+m[10]*z+m[14]};
 }
-double beamWeight(EyePoint p){
-    double depth=-(p.z+.22);
+EyePoint localRay(EyePoint p,const TorchPose& pose){
+    double a=pose.pitch*.0174532925199433,y=p.y-pose.y,z=p.z-pose.z;
+    return {p.x-pose.x,std::cos(a)*y+std::sin(a)*z,-std::sin(a)*y+std::cos(a)*z};
+}
+double beamWeight(EyePoint eye,const TorchPose& pose){
+    EyePoint p=localRay(eye,pose);
+    double depth=-p.z;
     if(depth<.18 || depth>10.)return 0.;
-    double radius=std::hypot(p.x-.36,p.y+.28)/depth;
+    double radius=std::hypot(p.x,p.y)/depth;
     return std::clamp(1.-radius/.49,0.,1.)*(1.-depth/11.);
 }
-void waterTraces(const GLdouble* m,double time){
+void waterTraces(const GLdouble* m,double time,const TorchPose& pose){
     constexpr double tau=6.283185307179586;
     glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();
     // A surge lifts a brief, translucent veil off ripple crests at three
@@ -274,7 +284,7 @@ void waterTraces(const GLdouble* m,double time){
         double z=sources[s][1]+.32*std::cos(j*2.7)+.12*std::sin(age+j);
         double y=seabedHeight(x,z)+.055+age*.096;
         EyePoint p=projectWaterPoint(m,x,y,z);
-        double glow=beamWeight(p)*std::sin(age/4.1*3.14159)*(.5+.5*currentSurge(x,z,time-age));
+        double glow=beamWeight(p,pose)*std::sin(age/4.1*3.14159)*(.5+.5*currentSurge(x,z,time-age));
         if(glow<.002)continue;
         glBegin(GL_TRIANGLE_FAN);glColor4d(.50,.57,.52,.116*glow);
         glVertex3d(p.x,p.y,p.z);glColor4d(.45,.54,.51,0);
@@ -292,7 +302,7 @@ void waterTraces(const GLdouble* m,double time){
         double x=.66+.10*age+.052*std::sin(age*4.+j);
         double z=-8.12+.07*std::sin(age*2.7+j);
         EyePoint p=projectWaterPoint(m,x,2.13+age*(.53+.024*(j%3)),z);
-        double light=beamWeight(p)*std::min(1.,age*7.)*std::min(1.,(4.3-age)*3.);
+        double light=beamWeight(p,pose)*std::min(1.,age*7.)*std::min(1.,(4.3-age)*3.);
         if(light<.006)continue;
         double r=(.019+.004*(j%4))*(1.+.08*age);
         glBegin(GL_TRIANGLE_STRIP);
@@ -308,13 +318,14 @@ void waterTraces(const GLdouble* m,double time){
     glPopMatrix();
 }
 }
-void finishDiveView(bool on,double time){
+void finishDiveView(bool on,double time,const TorchPose& pose,const BreathCloud& breath){
     shader::bind(0);
     glPushAttrib(GL_ENABLE_BIT|GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_POINT_BIT|GL_LIGHTING_BIT);
+    GLdouble m[16];glGetDoublev(GL_MODELVIEW_MATRIX,m);
     if(on){
         // World-space silt drifts through the beam. The scene depth buffer
         // hides particles behind wreckage and the range test bounds visibility.
-        GLdouble m[16];glGetDoublev(GL_MODELVIEW_MATRIX,m);
+
         glEnable(GL_BLEND);glBlendFunc(GL_SRC_ALPHA,GL_ONE);glDepthMask(GL_FALSE);
         glEnable(GL_POINT_SMOOTH);
         for(int layer=0;layer<2;++layer){
@@ -326,9 +337,8 @@ void finishDiveView(bool on,double time){
                 double y=.08+9.*random()+.09*std::cos(time*.51+i);
                 double z=-14.+31.*random()+.12*std::sin(time*.52+i);
                 x+=.26*currentSurge(x,z,time);
-                double ex=m[0]*x+m[4]*y+m[8]*z+m[12]-.36;
-                double ey=m[1]*x+m[5]*y+m[9]*z+m[13]+.28;
-                double ez=-(m[2]*x+m[6]*y+m[10]*z+m[14]+.22);
+                EyePoint ray=localRay(projectWaterPoint(m,x,y,z),pose);
+                double ex=ray.x,ey=ray.y,ez=-ray.z;
                 if(ez<.18 || ez>9. || (ez<2.)!=(layer==1)) continue;
                 double radial=(ex*ex+ey*ey)/(ez*ez);
                 if(radial>.24) continue;
@@ -337,15 +347,38 @@ void finishDiveView(bool on,double time){
             }
             glEnd();
         }
-        waterTraces(m,time);
+        waterTraces(m,time,pose);
         glDepthMask(GL_TRUE);glDisable(GL_BLEND);
     }
+    // Exhaled air detaches from the diver at birth and rises in world Y.
+    // Draw only its refractive rim and glint, respecting the scene depth.
+    glEnable(GL_BLEND);glBlendFunc(GL_SRC_ALPHA,GL_ONE);glDepthMask(GL_FALSE);
+    glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();
+    for(const auto& bubble:breath){
+        double age=time-bubble.born;
+        if(age<0 || age>1.9 || bubble.radius<=0) continue;
+        EyePoint p=projectWaterPoint(m,bubble.x+.065*age+.014*std::sin(age*6.),
+            bubble.y+.37*age,bubble.z-.045*age);
+        if(p.z>-.13) continue;
+        double fade=std::min(1.,age*12.)*std::min(1.,(1.9-age)*4.);
+        double r=bubble.radius*(1.+age*.12);
+        glBegin(GL_TRIANGLE_STRIP);
+        for(int i=0;i<=24;++i){
+            double a=i*6.28318530718/24.,x=std::cos(a),y=std::sin(a);
+            double glint=std::pow(.5+.5*std::cos(a-.97),8.);
+            glColor4d(.60,.81,.92,fade*(on?.53:.10)*(.12+.88*glint));
+            glVertex3d(p.x+r*x,p.y+.88*r*y,p.z);
+            glColor4d(.24,.43,.55,0);glVertex3d(p.x+.72*r*x,p.y+.62*r*y,p.z);
+        }
+        glEnd();
+    }
+    glPopMatrix();glDepthMask(GL_TRUE);glDisable(GL_BLEND);
     glEnable(GL_LIGHTING);glEnable(GL_LIGHT0);glEnable(GL_COLOR_MATERIAL);
     glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();
     const GLfloat direction[]={-.4f,.7f,-.7f,0};
     const GLfloat fill[]={on?.78f:.12f,on?.86f:.16f,on?.9f:.2f,1};
     glLightfv(GL_LIGHT0,GL_POSITION,direction);glLightfv(GL_LIGHT0,GL_DIFFUSE,fill);
-    glPopMatrix();drawHandLight(on);
+    glPopMatrix();drawHandLight(on,pose);
     glPopAttrib();shader::bind(program);
 }
 void releaseEffects(){

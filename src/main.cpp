@@ -34,6 +34,49 @@ Camera routePose(double frame){
     return {mix(a.x,b.x),mix(a.y,b.y),mix(a.z,b.z),mix(a.yaw,b.yaw),mix(a.pitch,b.pitch)};
 }
 struct Viewer {Camera camera;Effects effects;double mx=0,my=0;bool first=true;};
+struct DiverMotion {
+    double swim=0, lastTime=-1;
+    Camera lastCamera;
+    BreathCloud bubbles{};
+
+    TorchPose update(const Camera& c,double time,double aspect,bool fixedSample){
+        constexpr double breathPeriod=4.4;
+        double dt=time-lastTime;
+        double distance=std::hypot(std::hypot(c.x-lastCamera.x,c.z-lastCamera.z),c.y-lastCamera.y);
+        bool reset=fixedSample || lastTime<0 || dt<=0 || dt>.3 || distance>4.8*dt+.002;
+        if(reset){swim=0;bubbles={};}
+        else{
+            double speed=std::min(1.,distance/(dt*1.55));
+            double response=speed>swim?.30:.52;
+            swim+=(speed-swim)*(-std::expm1(-dt/response));
+        }
+        double breath=std::sin(time*(2.*3.14159265359/breathPeriod));
+        double stroke=std::sin(time*3.15);
+        TorchPose pose;
+        pose.x+=.009*swim*stroke+.0012*breath;
+        pose.y+=.0027*breath+.0045*swim*std::sin(time*6.30-.42);
+        pose.pitch=.22*breath+.78*swim*std::sin(time*3.15-.35);
+
+        // A brief exhalation on alternating breaths. Spawn on the left edge
+        // of the mask; after release, each bubble retains its world origin.
+        for(int i=0;i<3;++i){
+            const double cycle=2*breathPeriod;
+            double offset=.72+.145*i;
+            double born=offset+cycle*std::floor((time-offset)/cycle);
+            if(born<0 || time-born>1.9 || bubbles[i].born==born) continue;
+            if(!reset && born<=lastTime) continue;
+            double ex=-(.74+.03*i)*.47*std::tan(28*rad)*aspect;
+            double ey=-.15+.012*i,ez=-.47-.02*i;
+            double pitch=c.pitch*rad,yaw=c.yaw*rad;
+            double dy=std::cos(pitch)*ey-std::sin(pitch)*ez;
+            double dz=std::sin(pitch)*ey+std::cos(pitch)*ez;
+            bubbles[i]={c.x+std::cos(yaw)*ex-std::sin(yaw)*dz,c.y+dy,
+                        c.z+std::sin(yaw)*ex+std::cos(yaw)*dz,born,.010+.0025*i};
+        }
+        lastTime=time;lastCamera=c;
+        return pose;
+    }
+};
 void look(GLFWwindow* w,double x,double y){
     auto &v=*static_cast<Viewer*>(glfwGetWindowUserPointer(w));
     if(!v.first){
@@ -67,7 +110,7 @@ void toggle(GLFWwindow* w,int key,int,int action,int){
     if(key==GLFW_KEY_V) e.water=!e.water;
     if(key==GLFW_KEY_H) e.shadows=!e.shadows;
 }
-void render(const Camera &c,int w,int h,const Effects& effects,double time){
+void render(const Camera &c,int w,int h,const Effects& effects,double time,const TorchPose& pose,const BreathCloud& bubbles){
     const GLfloat water[]={.033f,.055f,.068f,1};
     glClearColor(water[0],water[1],water[2],1);
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
@@ -77,14 +120,14 @@ void render(const Camera &c,int w,int h,const Effects& effects,double time){
     glFrustum(-right,right,-top,top,.1,110);
     glMatrixMode(GL_MODELVIEW);glLoadIdentity();
     glRotated(-c.pitch,1,0,0);glRotated(c.yaw,0,1,0);glTranslated(-c.x,-c.y,-c.z);
-    bindEffects(effects,time,c.x,c.y,c.z,c.yaw,c.pitch);
+    bindEffects(effects,time,c.x,c.y,c.z,c.yaw,c.pitch,pose);
     // A distant eye-space surface lets open water receive scattering even
     // when the torch points above every piece of scene geometry.
     glPushMatrix();glLoadIdentity();glTexCoord2f(-1,0);glBegin(GL_QUADS);
     glVertex3d(-200,-80,-85);glVertex3d(200,-80,-85);glVertex3d(200,80,-85);glVertex3d(-200,80,-85);
     glEnd();glPopMatrix();
     drawGraybox(time);
-    finishDiveView(effects.lamp,time);
+    finishDiveView(effects.lamp,time,pose,bubbles);
 }
 // PPM keeps the framebuffer capture independent of image-library dependencies.
 bool capture(const char* path,int w,int h){
@@ -116,6 +159,7 @@ int main(int argc,char** argv){
     glfwMakeContextCurrent(w);glfwSwapInterval(route || film?0:1);
     std::cerr<<"OpenGL "<<glGetString(GL_VERSION)<<" / "<<glGetString(GL_RENDERER)<<'\n';
     if(!initEffects()){std::cerr<<"Underwater renderer initialization failed\n";glfwTerminate();return 1;}
+    DiverMotion diver;
     Viewer viewer;glfwSetWindowUserPointer(w,&viewer);
     glfwSetKeyCallback(w,toggle);
     if(!film && !snapshot && !route && !review){glfwSetInputMode(w,GLFW_CURSOR,GLFW_CURSOR_DISABLED);glfwSetCursorPosCallback(w,look);}
@@ -157,7 +201,8 @@ int main(int argc,char** argv){
         int width,height;glfwGetFramebufferSize(w,&width,&height);
         if(width<1 || height<1){glfwWaitEventsTimeout(.05);continue;}
         double time=review?checks[frame].time:((route || film)?tick*.1:(snapshot?0.:now));
-        render(viewer.camera,width,height,viewer.effects,time);
+        TorchPose pose=diver.update(viewer.camera,time,double(width)/height,review || snapshot);
+        render(viewer.camera,width,height,viewer.effects,time,pose,diver.bubbles);
         if(review){
             auto path=std::filesystem::path(argv[2])/(std::string(checks[frame].name)+".ppm");
             ok=capture(path.string().c_str(),width,height);

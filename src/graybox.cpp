@@ -2,6 +2,7 @@
 #include <cmath>
 #include <algorithm>
 #include "current.h"
+#include "effects.h"
 #include <initializer_list>
 
 namespace {
@@ -699,9 +700,9 @@ void drawGraybox(double time){
 
 // First-person equipment uses eye coordinates. Its barrel points away from
 // the glove, toward the same side of the frame as the spotlight origin.
-void drawHandLight(bool on){
+void drawHandLight(bool on,const TorchPose& pose){
     glPushMatrix();glLoadIdentity();
-    glTranslated(.36,-.28,-.46);glRotated(16,0,1,0);glRotated(12,1,0,0);
+    glTranslated(pose.x,pose.y,pose.z);glRotated(pose.pitch,1,0,0);glTranslated(0,0,-.24);glRotated(16,0,1,0);glRotated(12,1,0,0);
     glColor3f(.11f,.136f,.145f);
     spar({0,0,.22},{0,0,-.12},.047,.052,true,24);
     for(int i=0;i<7;++i){
